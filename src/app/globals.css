@@ -1,0 +1,178 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Tokens.
+
+   Dark is the base because the product is a dark one; light is a complete
+   override under [data-theme="light"]. Every token is defined in both, so
+   nothing can end up styled in one scheme and invisible in the other.
+
+   The scheme is an explicit choice stored on <html data-theme>, not a media
+   query — the toggle in the top bar is the control, and the inline script in
+   the root layout applies the saved choice before first paint.
+   --------------------------------------------------------------------------- */
+:root {
+  color-scheme: dark;
+
+  --background: #0a0a0c;
+  --sidebar: #101014;
+  --surface: #151519;
+  --surface-muted: #1d1d23;
+  --surface-hover: #24242b;
+  --foreground: #f4f4f5;
+  --muted: #8b8b97;
+  --border: #26262e;
+  --border-strong: #35353f;
+
+  /* Brand blue. `accent` fills (buttons, active nav); `accent-text` is the
+     lightened variant for links, badges and any accent-coloured text, which
+     the fill value is too dark to serve legibly against a near-black page. */
+  --accent: #2661c8;
+  --accent-hover: #1f52ab;
+  --accent-text: #7ba5f2;
+  --accent-foreground: #ffffff;
+  --accent-soft: #101f38;
+
+  --positive: #22c55e;
+  --warning: #eab308;
+  --danger: #ef4444;
+
+  --ring: #5b8ee6;
+  --overlay: rgb(0 0 0 / 0.66);
+  --shadow-panel: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px -12px rgb(0 0 0 / 0.6);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --background: #f7f7f9;
+  --sidebar: #ffffff;
+  --surface: #ffffff;
+  --surface-muted: #f1f1f5;
+  --surface-hover: #e9e9ef;
+  --foreground: #18181b;
+  --muted: #66666f;
+  --border: #e3e3e9;
+  --border-strong: #cfcfd8;
+
+  --accent: #2661c8;
+  --accent-hover: #1e4fa3;
+  /* Darkened rather than lightened here — the same text sits on white. */
+  --accent-text: #1e4fa3;
+  --accent-foreground: #ffffff;
+  --accent-soft: #e8effb;
+
+  --positive: #15803d;
+  --warning: #b45309;
+  --danger: #dc2626;
+
+  --ring: #2661c8;
+  --overlay: rgb(24 24 27 / 0.45);
+  --shadow-panel: 0 1px 2px rgb(24 24 27 / 0.06), 0 8px 24px -12px rgb(24 24 27 / 0.18);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-sidebar: var(--sidebar);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-hover: var(--surface-hover);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-text: var(--accent-text);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-soft: var(--accent-soft);
+  --color-positive: var(--positive);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  /* The take-out flow is used one-handed while holding parts; a stray
+     double-tap zoom in the middle of it is a genuine annoyance. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Respect the notch and the home indicator — this lives in a phone browser. */
+.safe-bottom {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+/* The wordmark's gradient, used in the sidebar and on login. Lighter than the
+   brand blue itself so it stays legible at small sizes on a dark ground. */
+.brand-mark {
+  background-image: linear-gradient(100deg, #7ba5f2 0%, #3b7de0 50%, #56c5ef 100%);
+  background-clip: text;
+  color: transparent;
+}
+
+:root[data-theme="light"] .brand-mark {
+  background-image: linear-gradient(100deg, #2661c8 0%, #1e4fa3 55%, #1785b8 100%);
+}
+
+/* The theme toggle's two glyphs. CSS picks the visible one straight from the
+   attribute, which keeps the button stateless and free of a hydration flip. */
+.theme-icon-light {
+  display: none;
+}
+
+:root[data-theme="light"] .theme-icon-dark {
+  display: none;
+}
+
+:root[data-theme="light"] .theme-icon-light {
+  display: block;
+}
+
+/* One focus treatment everywhere, so keyboard users get the same ring on a
+   link, a button and an input without each component re-deciding. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+/* Firefox honours these; WebKit takes the ::-webkit- rules below. */
+* {
+  scrollbar-color: var(--border-strong) transparent;
+  scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 9999px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
