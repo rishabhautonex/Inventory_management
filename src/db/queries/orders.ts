@@ -57,11 +57,33 @@ export type OrderListRow = {
   isOverdue: boolean;
 };
 
+/**
+ * Orders visible to whoever is asking.
+ *
+ * `null` means every order, which is what an admin or manager gets. A project
+ * head passes the projects they lead; an empty list therefore matches nothing
+ * rather than everything, which is the safe direction for a mistake to fall.
+ * An order with no project — the general shelf — has no head and so is only
+ * ever in the unrestricted set.
+ */
+export type OrderScope = { projectIds: string[] } | null;
+
+function scopeClause(scope: OrderScope) {
+  if (scope === null) return sql`TRUE`;
+  return sql`o.project_id = ANY(${sql.param(scope.projectIds)}::uuid[])`;
+}
+
 export async function listOrders(
   db: Database,
-  filters: { status?: OrderStatus; projectId?: string; limit?: number } = {},
+  filters: {
+    status?: OrderStatus;
+    projectId?: string;
+    scope?: OrderScope;
+    limit?: number;
+  } = {},
 ): Promise<OrderListRow[]> {
   const limit = Math.min(filters.limit ?? 100, 200);
+  const scope = filters.scope ?? null;
 
   const rows = await runQuery<{
     id: string;
@@ -107,7 +129,7 @@ export async function listOrders(
       FROM orders o
       LEFT JOIN vendors v  ON v.id = o.vendor_id
       LEFT JOIN projects p ON p.id = o.project_id
-      WHERE TRUE
+      WHERE ${scopeClause(scope)}
         ${filters.status ? sql`AND o.status = ${filters.status}` : sql``}
         ${filters.projectId ? sql`AND o.project_id = ${filters.projectId}` : sql``}
       ORDER BY
@@ -306,8 +328,16 @@ export async function getOrder(
   };
 }
 
-/** Counts for the orders tab strip and the dashboard tile. */
-export async function getOrderCounts(db: Database): Promise<{
+/**
+ * Counts for the orders tab strip and the dashboard tile.
+ *
+ * Takes the same scope as `listOrders`, so a project head's tile counts the
+ * orders they can actually open rather than the whole lab's.
+ */
+export async function getOrderCounts(
+  db: Database,
+  scope: OrderScope = null,
+): Promise<{
   open: number;
   overdue: number;
   awaitingShelving: number;
@@ -326,6 +356,7 @@ export async function getOrderCounts(db: Database): Promise<{
         count(*) FILTER (WHERE ${IS_OVERDUE}) AS overdue,
         count(*) FILTER (WHERE o.status = 'delivered') AS awaiting
       FROM orders o
+      WHERE ${scopeClause(scope)}
     `,
   );
 

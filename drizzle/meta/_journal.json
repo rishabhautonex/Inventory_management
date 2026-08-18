@@ -29,6 +29,13 @@
       "when": 1787028115300,
       "tag": "0003_bom_line_uniqueness",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787043101008,
+      "tag": "0004_project_details",
+      "breakpoints": true
     }
   ]
 }

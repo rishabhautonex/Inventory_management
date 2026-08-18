@@ -37,11 +37,19 @@ export function buildNav({
   canManage,
   canManageUsers,
   canSeeProjects,
+  canSeeOrders,
 }: {
   canManage: boolean;
   canManageUsers: boolean;
   /** Admins and managers, plus anybody who heads at least one project. */
   canSeeProjects: boolean;
+  /**
+   * Same set as `canSeeProjects`. A head reads the orders bought for their
+   * projects — they approved the request behind them and are told when one is
+   * overdue — but raising and receiving stay with `canManage`, so the group
+   * holds only "Orders" for them.
+   */
+  canSeeOrders: boolean;
 }): Entry[] {
   return [
     {
@@ -85,7 +93,7 @@ export function buildNav({
           : []),
       ],
     },
-    ...(canManage
+    ...(canSeeOrders
       ? [
           {
             kind: "group" as const,
@@ -93,12 +101,16 @@ export function buildNav({
             icon: ReceiptIcon,
             items: [
               { href: "/orders", label: "Orders", exact: true },
-              {
-                href: "/orders/from-invoice",
-                label: "From an invoice",
-                exact: true,
-              },
-              { href: "/orders/new", label: "New order", exact: true },
+              ...(canManage
+                ? [
+                    {
+                      href: "/orders/from-invoice",
+                      label: "From an invoice",
+                      exact: true,
+                    },
+                    { href: "/orders/new", label: "New order", exact: true },
+                  ]
+                : []),
             ],
           },
         ]
@@ -161,13 +173,20 @@ export function Sidebar({
   canManage,
   canManageUsers,
   canSeeProjects,
+  canSeeOrders,
 }: {
   canManage: boolean;
   canManageUsers: boolean;
   canSeeProjects: boolean;
+  canSeeOrders: boolean;
 }) {
   const pathname = usePathname();
-  const nav = buildNav({ canManage, canManageUsers, canSeeProjects });
+  const nav = buildNav({
+    canManage,
+    canManageUsers,
+    canSeeProjects,
+    canSeeOrders,
+  });
   const active = activeHref(pathname, nav);
 
   return (

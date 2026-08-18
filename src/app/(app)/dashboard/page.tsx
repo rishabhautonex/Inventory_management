@@ -11,17 +11,20 @@ import {
 } from "@/db/queries/dashboard";
 import { listMovements } from "@/db/queries/movements";
 import { getOrderCounts } from "@/db/queries/orders";
+import { listProjectSignals, listProjects } from "@/db/queries/projects";
 import { countAwaitingMe } from "@/db/queries/requests";
 import { canManageInventory, requireUser } from "@/lib/auth";
-import { formatDelta, formatReason, formatRelative } from "@/lib/format";
+import { INR, formatDelta, formatReason, formatRelative } from "@/lib/format";
 import {
   AlertIcon,
   ChevronRightIcon,
   CubeIcon,
+  LayersIcon,
   MovementsIcon,
   PackageIcon,
   ReceiptIcon,
   RequestIcon,
+  UploadIcon,
 } from "@/components/icons";
 import {
   Badge,
@@ -67,6 +70,16 @@ export default async function DashboardPage() {
 
   const showOrders = canManageInventory(user);
 
+  /**
+   * A project head's own band.
+   *
+   * Everything else on this screen is lab-wide, which is right for a search
+   * page's audience but leaves the person accountable for two projects reading
+   * numbers that mostly are not theirs. Only shown to somebody who actually
+   * leads something — an admin has /projects for the same view.
+   */
+  const leadIds = user.role === "project_head" ? user.leadProjectIds : [];
+
   const [
     summary,
     recent,
@@ -77,6 +90,8 @@ export default async function DashboardPage() {
     health,
     heatmap,
     topMovers,
+    myProjects,
+    projectSignals,
   ] = await Promise.all([
     getDashboardSummary(db),
     listMovements(db, { limit: RECENT_LIMIT }),
@@ -87,7 +102,11 @@ export default async function DashboardPage() {
     getStockHealth(db),
     getActivityHeatmap(db, HEATMAP_DAYS),
     listTopMovers(db, 30, 5),
+    leadIds.length > 0 ? listProjects(db, leadIds) : Promise.resolve([]),
+    listProjectSignals(db, leadIds),
   ]);
+
+  const signalFor = new Map(projectSignals.map((row) => [row.projectId, row]));
 
   // Only shown when there is something to act on. A tile reading "0 waiting"
   // is a tile that teaches the eye to skip that corner of the screen.
@@ -320,6 +339,120 @@ export default async function DashboardPage() {
             />
           ) : null}
         </div>
+
+        {myProjects.length > 0 ? (
+          <Panel
+            className="mt-4"
+            eyebrow="Yours to run"
+            title={myProjects.length === 1 ? "Your project" : "Your projects"}
+            action={
+              <Link
+                href="/projects"
+                className="inline-flex items-center gap-1 text-sm font-semibold text-accent-text hover:underline"
+              >
+                All projects
+                <ChevronRightIcon size={16} />
+              </Link>
+            }
+          >
+            <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {myProjects.map((project) => {
+                const signal = signalFor.get(project.id);
+
+                return (
+                  <li
+                    key={project.id}
+                    className="rounded-xl border border-border bg-surface-muted/60 p-4 transition-colors hover:border-border-strong"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <Link
+                        href={`/projects/${project.id}`}
+                        className="min-w-0 text-sm font-semibold hover:text-accent-text"
+                      >
+                        <span className="block truncate">{project.name}</span>
+                        <span className="mt-0.5 block font-mono text-xs font-medium text-muted">
+                          {project.code}
+                        </span>
+                      </Link>
+                      <LayersIcon size={16} className="shrink-0 text-muted" />
+                    </div>
+
+                    {/* Each badge restates a row already counted, and one that
+                        counts nothing is not drawn — a rail of zeroes teaches
+                        the eye to skip the whole card. */}
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {project.pendingRequests > 0 ? (
+                        <Badge tone="warning">
+                          {project.pendingRequests} to approve
+                        </Badge>
+                      ) : null}
+                      {signal && signal.empty > 0 ? (
+                        <Badge tone="danger">{signal.empty} empty</Badge>
+                      ) : null}
+                      {signal && signal.low > 0 ? (
+                        <Badge tone="warning">{signal.low} low</Badge>
+                      ) : null}
+                      {signal && signal.overdueOrders > 0 ? (
+                        <Badge tone="danger">
+                          {signal.overdueOrders} overdue
+                        </Badge>
+                      ) : null}
+                      {signal && signal.shortLines !== null && signal.shortLines > 0 ? (
+                        <Badge tone="accent">{signal.shortLines} short</Badge>
+                      ) : null}
+                      {project.pendingRequests === 0 &&
+                      signal &&
+                      signal.empty === 0 &&
+                      signal.low === 0 &&
+                      signal.overdueOrders === 0 &&
+                      (signal.shortLines ?? 0) === 0 ? (
+                        <Badge tone="positive">Nothing outstanding</Badge>
+                      ) : null}
+                    </div>
+
+                    <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
+                      <div>
+                        <dt className="eyebrow text-muted">Parts</dt>
+                        <dd className="readout mt-0.5 text-sm font-semibold">
+                          {project.distinctParts}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="eyebrow text-muted">Open orders</dt>
+                        <dd className="readout mt-0.5 text-sm font-semibold">
+                          {signal ? signal.openOrders : "—"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="eyebrow text-muted">Spend</dt>
+                        <dd className="readout mt-0.5 text-sm font-semibold">
+                          {project.spend > 0 ? INR.format(project.spend) : "—"}
+                        </dd>
+                      </div>
+                    </dl>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Link
+                        href={`/projects/${project.id}`}
+                        className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-semibold text-accent-text transition-colors hover:bg-surface-hover"
+                      >
+                        Open
+                        <ChevronRightIcon size={14} />
+                      </Link>
+                      <Link
+                        href={`/projects/${project.id}/bom`}
+                        className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-semibold text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
+                      >
+                        <UploadIcon size={14} />
+                        {project.bomCount > 0 ? "New BOM" : "Upload a BOM"}
+                      </Link>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </Panel>
+        ) : null}
 
         {/* Throughput and coverage: the two questions a lab head opens this
             screen to answer — is stock flowing, and is anything about to run

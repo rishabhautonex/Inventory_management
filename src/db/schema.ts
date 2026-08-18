@@ -98,6 +98,14 @@ export const projects = pgTable(
     name: text("name").notNull(),
     code: text("code").notNull(),
     status: projectStatusEnum("status").notNull().default("active"),
+    /**
+     * What the project is, in the project head's own words. Nullable rather
+     * than defaulted to "": a project nobody has described yet is a different
+     * thing from one described as nothing, and only the first should prompt.
+     */
+    description: text("description"),
+    /** Where the firmware lives. Validated as an http(s) URL before it lands. */
+    repoUrl: text("repo_url"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

@@ -5,7 +5,7 @@ import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { runQuery } from "@/db/rows";
 import { getOrder } from "@/db/queries/orders";
-import { canManageInventory, requireUser } from "@/lib/auth";
+import { canManageInventory, canViewOrder, requireUser } from "@/lib/auth";
 import { checkInvoiceStorageConfig } from "@/lib/storage";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { ExternalLinkIcon } from "@/components/icons";
@@ -49,21 +49,36 @@ export default async function OrderDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const user = await requireUser();
-  if (!canManageInventory(user)) {
-    return <NoAccess>Only admins and managers can see purchasing.</NoAccess>;
-  }
+  const canBuy = canManageInventory(user);
 
   const { id } = await params;
 
   const [order, locations] = await Promise.all([
     getOrder(db, id),
-    runQuery<{ id: string; path: string }>(
-      db,
-      sql`SELECT id, path FROM location_tree WHERE is_active ORDER BY path`,
-    ),
+    // Only the shelving panel needs these, and only an admin sees it.
+    canBuy
+      ? runQuery<{ id: string; path: string }>(
+          db,
+          sql`SELECT id, path FROM location_tree WHERE is_active ORDER BY path`,
+        )
+      : Promise.resolve([]),
   ]);
 
   if (!order) notFound();
+
+  /**
+   * Checked after the row is read because the answer depends on which project
+   * the order is for: a head may open their own project's orders and nobody
+   * else's. Every write on this page stays behind `canBuy`.
+   */
+  if (!canViewOrder(user, order.projectId)) {
+    return (
+      <NoAccess>
+        This order is visible to admins, managers, and the heads of the project
+        it was bought for.
+      </NoAccess>
+    );
+  }
 
   const storage = checkInvoiceStorageConfig();
 
@@ -178,7 +193,7 @@ export default async function OrderDetailPage({
             ) : null}
           </Card>
 
-          <ShelvePanel order={order} locations={locations} />
+          {canBuy ? <ShelvePanel order={order} locations={locations} /> : null}
         </div>
 
         <div className="space-y-4">
@@ -246,9 +261,11 @@ export default async function OrderDetailPage({
               ) : null}
             </dl>
 
-            <div className="mt-5">
-              <StatusActions orderId={order.id} status={order.status} />
-            </div>
+            {canBuy ? (
+              <div className="mt-5">
+                <StatusActions orderId={order.id} status={order.status} />
+              </div>
+            ) : null}
           </Card>
 
           <InvoicePanel
@@ -257,6 +274,7 @@ export default async function OrderDetailPage({
             invoiceMime={order.invoiceMime}
             ocrText={order.invoiceOcrText}
             storageProblem={storage.ok ? null : storage.error}
+            readOnly={!canBuy}
           />
         </div>
       </div>

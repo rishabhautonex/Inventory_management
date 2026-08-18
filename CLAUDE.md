@@ -251,6 +251,42 @@ order id, never from the uploaded filename.
 
 Still to come: the manager digest, and the daily overdue-delivery job.
 
+## What a project head sees
+
+The spec gives a head "full view of their assigned projects (stock, BOM, spend,
+requests)", and three of those four used to stop short of it.
+
+- **Orders are readable, never writable.** `canViewOrder(user, projectId)` in
+  [lib/auth.ts](src/lib/auth.ts) lets a head open the orders bought for a project
+  they lead — they approved the request behind them, and the spec puts them on
+  the overdue-delivery recipient list, which links to that page. Every write
+  stays behind `canManageInventory`: no status buttons, no shelving panel, no
+  upload. `getInvoiceUrlAction` is the one order action they may call, because
+  the bill is the evidence behind the spend figure. An order with no project has
+  no head, so a null `project_id` must never read as "anyone".
+- **`listOrders` and `getOrderCounts` take an `OrderScope`.** `null` means every
+  order; `{ projectIds }` means those projects only, and an empty list therefore
+  matches nothing rather than everything.
+- **An empty shelf is still a row.** `getProjectStock()` filters `on_hand > 0`
+  so "in the cupboard" lists what is actually there, which quietly removed the
+  one row a head is notified about. `getProjectAttention()` reads from the
+  thresholds side with a LEFT JOIN and keeps the zeros — a threshold whose shelf
+  has never seen a movement is empty, not missing, exactly as `getStockHealth()`
+  treats it.
+- **`listProjectSignals()`** is the per-project band on the dashboard, one query
+  for every project somebody leads rather than one per project. `shortLines` is
+  `null` for a project with no BOM: nothing asked for is not the same as
+  everything arrived, and a "0 short" badge would read as the second.
+
+`projects.description` and `projects.repo_url` are the head's own fields —
+what the project is, and where its firmware lives — behind
+`canEditProjectDetails`, which is the same set as `canManageProjectBom` and for
+the same reason. Name, code and status stay administrative, because the code is
+what every order and cupboard is filed under. Both columns are nullable and
+cleared to `null` rather than `""`: a project nobody has described is a different
+thing from one described as nothing, and only the first should prompt.
+`tests/projects.test.ts` pins all of it.
+
 ## Part requests
 
 ```

@@ -2,8 +2,9 @@ import Link from "next/link";
 
 import { db } from "@/db";
 import { listProjects } from "@/db/queries/projects";
-import { canManageInventory, requireUser } from "@/lib/auth";
+import { canManageInventory, canManageProjectBom, requireUser } from "@/lib/auth";
 import { INR } from "@/lib/format";
+import { GithubIcon, UploadIcon } from "@/components/icons";
 import {
   Badge,
   Card,
@@ -77,6 +78,9 @@ export default async function ProjectsPage() {
               <th className={`${thClass} text-right`}>Pieces</th>
               <th className={`${thClass} text-right`}>Spend</th>
               <th className={thClass}>Waiting on</th>
+              <th className={thClass}>
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -94,7 +98,23 @@ export default async function ProjectsPage() {
                     {project.status === "closed" ? (
                       <Badge tone="neutral">Closed</Badge>
                     ) : null}
+                    {project.repoUrl ? (
+                      <a
+                        href={project.repoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-accent-text hover:underline"
+                      >
+                        <GithubIcon size={13} />
+                        Repo
+                      </a>
+                    ) : null}
                   </p>
+                  {project.description ? (
+                    <p className="mt-1 max-w-md truncate text-xs text-muted">
+                      {project.description}
+                    </p>
+                  ) : null}
                 </td>
 
                 <td className={`${tdClass} text-muted`}>
@@ -131,6 +151,20 @@ export default async function ProjectsPage() {
                       <span className="text-xs text-muted">No BOM</span>
                     ) : null}
                   </div>
+                </td>
+
+                {/* The BOM is the head's own document, so the upload path is on
+                    the row rather than only inside the project page. */}
+                <td className={`${tdClass} text-right`}>
+                  {canManageProjectBom(user, project.id) ? (
+                    <Link
+                      href={`/projects/${project.id}/bom`}
+                      className="inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-lg border border-border px-3 text-xs font-semibold text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
+                    >
+                      <UploadIcon size={14} />
+                      {project.bomCount > 0 ? "New BOM" : "Upload a BOM"}
+                    </Link>
+                  ) : null}
                 </td>
               </tr>
             ))}

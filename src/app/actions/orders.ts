@@ -10,6 +10,7 @@ import { getOrder, type OrderStatus } from "@/db/queries/orders";
 import { insertOrderWithLines, resolveVendorByName } from "@/lib/orders";
 import {
   canManageInventory,
+  canViewOrder,
   getSessionUser,
   type SessionUser,
 } from "@/lib/auth";
@@ -425,16 +426,32 @@ export async function extractInvoiceTextAction(
   }
 }
 
-/** A short-lived URL for viewing the stored invoice. */
+/**
+ * A short-lived URL for viewing the stored invoice.
+ *
+ * The only order action a project head may call, and the check is therefore
+ * `canViewOrder` against the order's own project rather than the admin gate the
+ * writes use. The bill is the evidence behind the spend figure on their project
+ * page, and the spec gives them that figure.
+ */
 export async function getInvoiceUrlAction(
   orderId: string,
 ): Promise<Result<{ url: string }>> {
-  const auth = await requireAdmin();
-  if (!auth.ok) return { ok: false, error: auth.error };
+  const user = await getSessionUser();
+  if (!user) {
+    return { ok: false, error: "Your session expired. Sign in again." };
+  }
 
   try {
     const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
-    if (!order?.invoiceFileUrl) {
+
+    // Same answer whether the order is missing or simply not theirs — a
+    // distinct "not allowed" would confirm the order exists.
+    if (!order || !canViewOrder(user, order.projectId)) {
+      return { ok: false, error: "That order could not be found." };
+    }
+
+    if (!order.invoiceFileUrl) {
       return { ok: false, error: "There is no invoice on this order yet." };
     }
 

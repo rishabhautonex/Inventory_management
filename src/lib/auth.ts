@@ -170,6 +170,44 @@ export function canManageProjectBom(
 }
 
 /**
+ * Edit a project's own description and repository link.
+ *
+ * Same set as `canManageProjectBom` and for the same reason: the person running
+ * a project is the person who can say what it is, even though they may not
+ * touch the catalogue, the ledger or the project list itself. Renaming a
+ * project or closing it stays with an admin — `canManageInventory` — because
+ * the code is what every order and cupboard is filed under.
+ */
+export function canEditProjectDetails(
+  user: SessionUser,
+  projectId: string,
+): boolean {
+  if (user.role === "manager" || user.role === "admin") return true;
+  return user.role === "project_head" && user.leadProjectIds.includes(projectId);
+}
+
+/**
+ * Read an order.
+ *
+ * Wider than `canManageInventory`, which still gates every write: a head who
+ * approved a request is shown "this became order O-1234" and has to be able to
+ * open it, and the spec puts them on the recipient list for overdue-delivery
+ * alerts, which link to the same page. Spend they are accountable for is not
+ * something to keep from them.
+ *
+ * An order with no project — the general shelf — has no head, so it stays with
+ * admins and managers. A null `projectId` must never read as "everyone".
+ */
+export function canViewOrder(
+  user: SessionUser,
+  projectId: string | null,
+): boolean {
+  if (canManageInventory(user)) return true;
+  if (projectId === null) return false;
+  return user.leadProjectIds.includes(projectId);
+}
+
+/**
  * Undo a movement.
  *
  * Anyone may undo their own mistake — that is what makes the toast's Undo

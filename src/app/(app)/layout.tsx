@@ -41,6 +41,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         canManage={canManage}
         canManageUsers={canUsers}
         canSeeProjects={canSeeProjects}
+        canSeeOrders={canSeeProjects}
       />
 
       <div className="grid-backdrop flex min-h-dvh flex-col lg:pl-64">

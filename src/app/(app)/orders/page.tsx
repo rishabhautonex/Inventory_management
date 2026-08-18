@@ -4,6 +4,7 @@ import { db } from "@/db";
 import {
   getOrderCounts,
   listOrders,
+  type OrderScope,
   type OrderStatus,
 } from "@/db/queries/orders";
 import { canManageInventory, requireUser } from "@/lib/auth";
@@ -42,7 +43,16 @@ export default async function OrdersPage({
   searchParams: Promise<{ status?: string }>;
 }) {
   const user = await requireUser();
-  if (!canManageInventory(user)) {
+  const canBuy = canManageInventory(user);
+
+  /**
+   * A project head reads this screen scoped to the projects they lead, and
+   * cannot raise or receive anything. They are accountable for that spend and
+   * are on the recipient list for its overdue alerts, so hiding it entirely
+   * would be hiding their own orders from them.
+   */
+  const scope: OrderScope = canBuy ? null : { projectIds: user.leadProjectIds };
+  if (!canBuy && user.leadProjectIds.length === 0) {
     return <NoAccess>Only admins and managers can see purchasing.</NoAccess>;
   }
 
@@ -52,26 +62,32 @@ export default async function OrdersPage({
     : undefined;
 
   const [rows, counts] = await Promise.all([
-    listOrders(db, { status }),
-    getOrderCounts(db),
+    listOrders(db, { status, scope }),
+    getOrderCounts(db, scope),
   ]);
 
   return (
     <Page>
       <PageHeader
         title="Orders"
-        description="Parts coming in. Stock is only recorded when a line is put away, never when it is ordered."
+        description={
+          canBuy
+            ? "Parts coming in. Stock is only recorded when a line is put away, never when it is ordered."
+            : "Parts coming in for the projects you head. Stock is only recorded when a line is put away, never when it is ordered."
+        }
         action={
-          <div className="flex flex-wrap gap-3">
-            <Link href="/orders/from-invoice" className={primaryButtonClass}>
-              <UploadIcon size={16} />
-              From an invoice
-            </Link>
-            <Link href="/orders/new" className={secondaryButtonClass}>
-              <PlusIcon size={16} />
-              By hand
-            </Link>
-          </div>
+          canBuy ? (
+            <div className="flex flex-wrap gap-3">
+              <Link href="/orders/from-invoice" className={primaryButtonClass}>
+                <UploadIcon size={16} />
+                From an invoice
+              </Link>
+              <Link href="/orders/new" className={secondaryButtonClass}>
+                <PlusIcon size={16} />
+                By hand
+              </Link>
+            </div>
+          ) : undefined
         }
       />
 
@@ -101,12 +117,18 @@ export default async function OrdersPage({
         <Card>
           <EmptyState
             title={status ? `No ${ORDER_STATUS_LABEL[status]} orders` : "No orders yet"}
-            description="Record a purchase here, then put its lines away when the box arrives — that is what writes the stock."
+            description={
+              canBuy
+                ? "Record a purchase here, then put its lines away when the box arrives — that is what writes the stock."
+                : "Nothing has been bought for your projects yet. An admin raises the order; it shows up here as soon as they do."
+            }
             action={
-              <Link href="/orders/from-invoice" className={primaryButtonClass}>
-                <UploadIcon size={16} />
-                Start from an invoice
-              </Link>
+              canBuy ? (
+                <Link href="/orders/from-invoice" className={primaryButtonClass}>
+                  <UploadIcon size={16} />
+                  Start from an invoice
+                </Link>
+              ) : undefined
             }
           />
         </Card>

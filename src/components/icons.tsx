@@ -319,3 +319,17 @@ export function RequestIcon({ className, size = 20 }: IconProps) {
     </svg>
   );
 }
+
+/**
+ * The GitHub mark, redrawn as a stroke rather than pasted as their filled logo:
+ * everything in this set is one weight in `currentColor`, and a solid glyph
+ * beside them reads as a foreign object.
+ */
+export function GithubIcon({ className, size = 20 }: IconProps) {
+  return (
+    <svg {...base(size)} className={className}>
+      <path d="M9 19c-4 1.4-4-2.1-5.5-2.6" />
+      <path d="M15 21v-3.3a2.9 2.9 0 0 0-.8-2.2c2.6-.3 4.3-1.5 4.3-4.9a3.9 3.9 0 0 0-1.1-2.7 3.6 3.6 0 0 0-.1-2.7s-1.1-.3-3.4 1.3a8.6 8.6 0 0 0-4.6 0C7 3 5.9 3.2 5.9 3.2a3.6 3.6 0 0 0-.1 2.7A3.9 3.9 0 0 0 4.7 8.7c0 3.4 1.7 4.6 4.3 4.9a2.9 2.9 0 0 0-.8 2.2V21" />
+    </svg>
+  );
+}

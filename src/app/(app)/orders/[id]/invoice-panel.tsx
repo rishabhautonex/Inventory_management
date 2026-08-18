@@ -41,6 +41,7 @@ export function InvoicePanel({
   invoiceMime,
   ocrText,
   storageProblem,
+  readOnly = false,
 }: {
   orderId: string;
   hasInvoice: boolean;
@@ -48,6 +49,13 @@ export function InvoicePanel({
   ocrText: string | null;
   /** Set when storage is misconfigured, so the panel can say so up front. */
   storageProblem?: string | null;
+  /**
+   * A project head reading their own project's spend: the bill is theirs to
+   * see, but uploading, re-reading and matching it are purchasing work. The
+   * controls are dropped rather than disabled — a greyed-out Upload invites a
+   * click and then explains nothing.
+   */
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -144,62 +152,90 @@ export function InvoicePanel({
       </header>
 
       <div className="space-y-5 border-t border-border p-4 sm:p-5">
-        {storageProblem ? (
+        {storageProblem && !readOnly ? (
           <p className="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
             <span className="font-semibold">Storage is not set up: </span>
             {storageProblem}
           </p>
         ) : null}
 
-        <div>
-          <label className="mb-1.5 block text-sm font-medium">
-            {hasInvoice ? "Replace the file" : "Upload the invoice"}
-          </label>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif"
-            className="block w-full cursor-pointer rounded-lg border border-border bg-surface-muted text-sm text-muted file:mr-3 file:cursor-pointer file:rounded-l-lg file:border-0 file:bg-surface-hover file:px-4 file:py-3 file:text-sm file:font-medium file:text-foreground"
-          />
-          <p className="mt-1.5 text-xs text-muted">
-            A PDF or a photo of the bill, up to 20 MB. The original is always kept
-            exactly as uploaded.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={upload}
-            disabled={busy}
-            className={primaryButtonClass}
-          >
-            {uploading ? "Uploading…" : hasInvoice ? "Replace" : "Upload"}
-          </button>
-
-          {hasInvoice ? (
-            <>
+        {readOnly ? (
+          hasInvoice ? (
+            <div className="flex flex-wrap gap-3">
               <button
                 type="button"
                 onClick={openInvoice}
                 disabled={busy}
                 className={secondaryButtonClass}
               >
-                View
+                {extracting ? "Opening…" : "View the invoice"}
                 <ExternalLinkIcon size={16} />
               </button>
+            </div>
+          ) : (
+            <p className="text-sm text-muted">
+              No invoice has been attached to this order yet.
+            </p>
+          )
+        ) : null}
 
+        {readOnly ? null : (
+          <>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">
+                {hasInvoice ? "Replace the file" : "Upload the invoice"}
+              </label>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif"
+                className="block w-full cursor-pointer rounded-lg border border-border bg-surface-muted text-sm text-muted file:mr-3 file:cursor-pointer file:rounded-l-lg file:border-0 file:bg-surface-hover file:px-4 file:py-3 file:text-sm file:font-medium file:text-foreground"
+              />
+              <p className="mt-1.5 text-xs text-muted">
+                A PDF or a photo of the bill, up to 20 MB. The original is
+                always kept exactly as uploaded.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
               <button
                 type="button"
-                onClick={readText}
+                onClick={upload}
                 disabled={busy}
-                className={secondaryButtonClass}
+                className={primaryButtonClass}
               >
-                {extracting ? "Reading…" : ocrText ? "Read again" : "Read text"}
+                {uploading ? "Uploading…" : hasInvoice ? "Replace" : "Upload"}
               </button>
-            </>
-          ) : null}
-        </div>
+
+              {hasInvoice ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={openInvoice}
+                    disabled={busy}
+                    className={secondaryButtonClass}
+                  >
+                    View
+                    <ExternalLinkIcon size={16} />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={readText}
+                    disabled={busy}
+                    className={secondaryButtonClass}
+                  >
+                    {extracting
+                      ? "Reading…"
+                      : ocrText
+                        ? "Read again"
+                        : "Read text"}
+                  </button>
+                </>
+              ) : null}
+            </div>
+          </>
+        )}
 
         <ErrorText>{error}</ErrorText>
 

@@ -3,9 +3,15 @@ import { notFound } from "next/navigation";
 
 import { db } from "@/db";
 import { getBomShortfall, listProjectBoms } from "@/db/queries/bom";
-import { getProject, getProjectStock } from "@/db/queries/projects";
+import { listOrders } from "@/db/queries/orders";
+import {
+  getProject,
+  getProjectAttention,
+  getProjectStock,
+} from "@/db/queries/projects";
 import { listRequests, visibilityFor } from "@/db/queries/requests";
 import {
+  canEditProjectDetails,
   canManageInventory,
   canManageProjectBom,
   canViewProject,
@@ -40,8 +46,14 @@ import {
   REQUEST_STATUS_LABEL,
   REQUEST_STATUS_TONE,
 } from "../../requests/request-status";
+import {
+  ORDER_STATUS_LABEL,
+  ORDER_STATUS_TONE,
+  orderRef,
+} from "../../orders/order-ref";
 import { ShortfallTable } from "./shortfall-table";
 import { BomSwitcher } from "./bom-switcher";
+import { ProjectDetailsPanel } from "./details-panel";
 
 export const metadata = { title: "Project · LabStock" };
 
@@ -76,12 +88,19 @@ export default async function ProjectPage({
 
   const canUploadBom = canManageProjectBom(user, project.id);
   const canOrder = canManageInventory(user);
+  const canEditDetails = canEditProjectDetails(user, project.id);
 
-  const [boms, stock, requests] = await Promise.all([
+  const [boms, stock, attention, requests, orders] = await Promise.all([
     listProjectBoms(db, project.id),
     getProjectStock(db, project.id),
+    getProjectAttention(db, project.id),
     listRequests(db, visibilityFor(user), { projectId: project.id, limit: 20 }),
+    // Scoped to this project, so no visibility question arises: anybody who got
+    // this far can see the project, and these are its own orders.
+    listOrders(db, { projectId: project.id, limit: 10 }),
   ]);
+
+  const empties = attention.filter((line) => line.onHand <= 0).length;
 
   // Newest by default: a BOM is a record of what was asked for at a point in
   // time, and only the latest can be the current answer to "what are we short".
@@ -153,6 +172,13 @@ export default async function ProjectPage({
       </div>
 
       <div className="space-y-4">
+        <ProjectDetailsPanel
+          projectId={project.id}
+          description={project.description}
+          repoUrl={project.repoUrl}
+          canEdit={canEditDetails}
+        />
+
         <Panel
           title="BOM shortfall"
           action={
@@ -203,6 +229,78 @@ export default async function ProjectPage({
                 canOrder={canOrder}
               />
             </>
+          )}
+        </Panel>
+
+        <Panel
+          eyebrow="Against the minimums set on these shelves"
+          title="Needs attention"
+          action={
+            attention.length > 0 ? (
+              <div className="flex items-center gap-2">
+                {empties > 0 ? <Badge tone="danger">{empties} empty</Badge> : null}
+                {attention.length - empties > 0 ? (
+                  <Badge tone="warning">{attention.length - empties} low</Badge>
+                ) : null}
+              </div>
+            ) : undefined
+          }
+        >
+          {attention.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted">
+              Nothing on this project&apos;s shelves is at or below its minimum.
+              Only shelves with a minimum set are watched.
+            </p>
+          ) : (
+            <TableWrap minWidth={620}>
+              <thead className={theadClass}>
+                <tr>
+                  <th className={thClass}>Part</th>
+                  <th className={thClass}>Where</th>
+                  <th className={`${thClass} text-right`}>On hand</th>
+                  <th className={`${thClass} text-right`}>Minimum</th>
+                </tr>
+              </thead>
+              <tbody>
+                {attention.map((line) => (
+                  <tr
+                    key={`${line.componentId}-${line.locationId}`}
+                    className={trClass}
+                  >
+                    <td className={tdClass}>
+                      <Link
+                        href={`/parts/${line.componentId}`}
+                        className="font-medium text-accent-text hover:underline"
+                      >
+                        {line.componentName}
+                      </Link>
+                      {line.componentMpn ? (
+                        <p className="mt-0.5 font-mono text-xs text-muted">
+                          {line.componentMpn}
+                        </p>
+                      ) : null}
+                    </td>
+                    <td className={`${tdClass} text-muted`}>
+                      {line.locationPath}
+                    </td>
+                    <td className={`${tdClass} text-right`}>
+                      <span
+                        className={`readout font-semibold ${
+                          line.onHand <= 0 ? "text-danger" : "text-warning"
+                        }`}
+                      >
+                        {line.onHand}
+                      </span>
+                    </td>
+                    <td
+                      className={`${tdClass} text-right tabular-nums text-muted`}
+                    >
+                      {line.minQty}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </TableWrap>
           )}
         </Panel>
 
@@ -290,6 +388,87 @@ export default async function ProjectPage({
                       ) : (
                         line.onHand
                       )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </TableWrap>
+          )}
+        </Panel>
+
+        <Panel
+          eyebrow="What the spend went on"
+          title="Orders for this project"
+          action={
+            orders.length > 0 ? (
+              <Link
+                href="/orders"
+                className="text-sm font-medium text-accent-text hover:underline"
+              >
+                All orders
+              </Link>
+            ) : undefined
+          }
+        >
+          {orders.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted">
+              Nothing has been bought for this project yet. An order is an
+              intention — it becomes stock only when a line is put away.
+            </p>
+          ) : (
+            <TableWrap minWidth={680}>
+              <thead className={theadClass}>
+                <tr>
+                  <th className={thClass}>Order</th>
+                  <th className={thClass}>Vendor</th>
+                  <th className={thClass}>Expected</th>
+                  <th className={`${thClass} text-right`}>Amount</th>
+                  <th className={thClass}>Put away</th>
+                  <th className={thClass}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orders.map((order) => (
+                  <tr key={order.id} className={trClass}>
+                    <td className={tdClass}>
+                      <Link
+                        href={`/orders/${order.id}`}
+                        className="font-mono text-xs font-semibold text-accent-text hover:underline"
+                      >
+                        {orderRef(order.id)}
+                      </Link>
+                    </td>
+                    <td className={tdClass}>{order.vendorName ?? "—"}</td>
+                    <td className={tdClass}>
+                      {order.expectedDate ? (
+                        <span
+                          className={
+                            order.isOverdue ? "text-danger" : "text-muted"
+                          }
+                        >
+                          {formatDate(order.expectedDate)}
+                        </span>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )}
+                    </td>
+                    <td className={`${tdClass} text-right tabular-nums`}>
+                      {order.totalAmount === null
+                        ? "—"
+                        : INR.format(order.totalAmount)}
+                    </td>
+                    <td className={`${tdClass} tabular-nums text-muted`}>
+                      {order.shelvedLineCount}/{order.lineCount}
+                    </td>
+                    <td className={tdClass}>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Badge tone={ORDER_STATUS_TONE[order.status]}>
+                          {ORDER_STATUS_LABEL[order.status]}
+                        </Badge>
+                        {order.isOverdue ? (
+                          <Badge tone="danger">Overdue</Badge>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}
