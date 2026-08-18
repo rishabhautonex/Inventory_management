@@ -21,9 +21,9 @@ export const textareaClass =
 export const selectClass = inputClass;
 
 /**
- * The accent is a bright signal cyan, so a filled button carries dark ink
- * (`accent-foreground`) rather than white, and lightens rather than darkens on
- * hover. The ring underneath is what gives it the lit, raised look.
+ * The accent is a signal blue deep enough to carry white ink
+ * (`accent-foreground`), and it lightens rather than darkens on hover. The
+ * ring underneath is what gives it the lit, raised look.
  */
 export const primaryButtonClass =
   "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-4 text-sm font-semibold text-accent-foreground shadow-[0_1px_0_0_rgb(255_255_255/0.25)_inset,0_8px_20px_-10px_var(--accent)] transition-colors hover:bg-accent-hover disabled:pointer-events-none disabled:opacity-50 active:scale-[0.99]";

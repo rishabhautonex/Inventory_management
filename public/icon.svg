@@ -1,16 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="LabStock">
   <!--
     The home-screen icon: the instrument-panel ground with the cube glyph the
-    app already uses for a part, in the brand cyan. Same stroke geometry as
+    app already uses for a part, in the brand blue. Same stroke geometry as
     CubeIcon in components/icons.tsx, scaled up — the icon and the app should
     plainly be the same drawing.
   -->
-  <rect width="512" height="512" rx="112" fill="#0B0F14" />
-  <rect x="8" y="8" width="496" height="496" rx="104" fill="none" stroke="#1E2A36" stroke-width="16" />
+  <rect width="512" height="512" rx="112" fill="#0A0A0C" />
+  <rect x="8" y="8" width="496" height="496" rx="104" fill="none" stroke="#23232A" stroke-width="16" />
   <g
     transform="translate(112 112) scale(12.16)"
     fill="none"
-    stroke="#35D6FF"
+    stroke="#4A85F8"
     stroke-width="1.75"
     stroke-linecap="round"
     stroke-linejoin="round"

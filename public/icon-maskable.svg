@@ -5,11 +5,11 @@
     the inner 80% safe zone. Smaller glyph than icon.svg for exactly that reason
     — an icon drawn to the edge loses its corners on a circular mask.
   -->
-  <rect width="512" height="512" fill="#0B0F14" />
+  <rect width="512" height="512" fill="#0A0A0C" />
   <g
     transform="translate(153.6 153.6) scale(8.53)"
     fill="none"
-    stroke="#35D6FF"
+    stroke="#4A85F8"
     stroke-width="1.75"
     stroke-linecap="round"
     stroke-linejoin="round"

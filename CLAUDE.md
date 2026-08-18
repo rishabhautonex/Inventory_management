@@ -79,11 +79,12 @@ tests/                  run against real Postgres via PGlite
 
 ## The look
 
-An instrument panel, not a document: near-black `#0B0F14` ground, `#121922`
-surfaces, and a signal palette that only ever carries meaning — cyan `#35D6FF`
-for the brand and anything selected, emerald `#31E6A8` for in and healthy,
-amber `#FFB547` for out and low, red `#FF5D73` for empty and overdue. Text is
-`#F5F7FA` over `#94A3B8`.
+An instrument panel, not a document: neutral near-black `#0A0A0C` ground,
+`#131316` surfaces, and a signal palette that only ever carries meaning — blue
+`#2E6FF0` for the brand and anything selected, green `#22C55E` for in and
+healthy, amber `#F59E0B` for out and low, red `#F04438` for empty and overdue.
+Text is `#F7F8FA` over `#8E9099`. The ground is deliberately untinted: hue
+belongs to the signals, and a cast in the surfaces fights them.
 
 Both schemes are complete token sets in [globals.css](src/app/globals.css);
 light is an override under `:root[data-theme="light"]`, and the toggle in the
@@ -96,13 +97,15 @@ that script spent a while reading `localStorage.getItem(undefined)`.
 
 Rules that are easy to break:
 
-- **`accent` fills, `accent-text` writes.** Cyan is bright, so a filled control
-  carries dark ink (`--accent-foreground`) and lightens on hover, while links,
-  badge text and active labels use `text-accent-text`. In light mode both are
-  the same hue taken down far enough to sit on white.
+- **`accent` fills, `accent-text` writes.** `--accent` is deep enough to carry
+  white ink (`--accent-foreground`) and lightens on hover; links, badge text and
+  active labels use `text-accent-text`, the same hue lifted to `#6EA8FF` so it
+  reads against a near-black surface. In light mode both are the same hue taken
+  down far enough to sit on white. The split is what keeps a filled button at
+  4.5:1 without making links dim.
 - **A solid accent fill means "this is the action".** Primary buttons and the
   logo tile, and nothing else. Selected nav entries and filter tabs use
-  `bg-accent-soft` with a lit edge — eight solid cyan pills down a rail shout
+  `bg-accent-soft` with a lit edge — eight solid blue pills down a rail shout
   louder than the screen they introduce.
 - **Never define a colour only inside `[data-theme="light"]`.** Bare `:root` is
   the base; anything missing there is invisible in dark mode.

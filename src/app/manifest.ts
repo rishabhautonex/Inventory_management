@@ -26,8 +26,8 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: "portrait",
     // The instrument-panel ground, so the splash does not flash white on a dark
     // screen before the first paint.
-    background_color: "#0b0f14",
-    theme_color: "#0b0f14",
+    background_color: "#0a0a0c",
+    theme_color: "#0a0a0c",
     icons: [
       {
         src: "/icon.svg",

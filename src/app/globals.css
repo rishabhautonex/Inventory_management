@@ -14,15 +14,16 @@
 :root {
   color-scheme: dark;
 
-  /* Near-black with a blue cast rather than a neutral grey: the instrument
-     colours below (cyan, emerald, amber) read as lit against it. */
-  --background: #0b0f14;
-  --sidebar: #0a0e13;
-  --surface: #121922;
-  --surface-muted: #161f2a;
-  --surface-hover: #1c2734;
-  --foreground: #f5f7fa;
-  --muted: #94a3b8;
+  /* Neutral near-black rather than a tinted one: the signal colours below
+     (blue, green, amber) are what carry hue, and a cast in the ground fights
+     them. Cards sit a step above the page, the rail a step below it. */
+  --background: #0a0a0c;
+  --sidebar: #060608;
+  --surface: #131316;
+  --surface-muted: #1a1a1f;
+  --surface-hover: #232329;
+  --foreground: #f7f8fa;
+  --muted: #8e9099;
 
   /* Borders are white at low alpha rather than a fixed grey, so a panel
      stacked on a lighter surface keeps the same apparent weight as one
@@ -30,21 +31,21 @@
   --border: rgb(255 255 255 / 0.08);
   --border-strong: rgb(255 255 255 / 0.16);
 
-  /* Signal cyan. `accent` fills (buttons, active nav, chart strokes) and is
-     bright enough that its own foreground is dark ink; `accent-text` is the
-     same hue used for links and badge text on a dark ground. */
-  --accent: #35d6ff;
-  --accent-hover: #5fe1ff;
-  --accent-text: #35d6ff;
-  --accent-foreground: #04121b;
-  --accent-soft: rgb(53 214 255 / 0.12);
+  /* Signal blue. `accent` fills (buttons, active nav, chart strokes) and is
+     deep enough to carry white ink; `accent-text` is the same hue lifted for
+     links and badge text, which need to read against a near-black surface. */
+  --accent: #2e6ff0;
+  --accent-hover: #4a85f8;
+  --accent-text: #6ea8ff;
+  --accent-foreground: #ffffff;
+  --accent-soft: rgb(46 111 240 / 0.16);
 
-  --positive: #31e6a8;
-  --warning: #ffb547;
-  --danger: #ff5d73;
+  --positive: #22c55e;
+  --warning: #f59e0b;
+  --danger: #f04438;
 
-  --ring: #35d6ff;
-  --overlay: rgb(3 6 10 / 0.72);
+  --ring: #4a85f8;
+  --overlay: rgb(4 4 6 / 0.72);
 
   /* Surface treatments. `glass` is the top-lit gradient every card carries;
      `panel-line` is the 1px inner highlight that reads as a bevel. */
@@ -65,31 +66,31 @@
 :root[data-theme="light"] {
   color-scheme: light;
 
-  --background: #f3f5f8;
+  --background: #f4f5f7;
   --sidebar: #ffffff;
   --surface: #ffffff;
-  --surface-muted: #eef2f7;
-  --surface-hover: #e4eaf2;
-  --foreground: #0b0f14;
-  --muted: #5a6b80;
+  --surface-muted: #eff0f3;
+  --surface-hover: #e5e7eb;
+  --foreground: #0a0a0c;
+  --muted: #5c6068;
 
-  --border: rgb(11 15 20 / 0.1);
-  --border-strong: rgb(11 15 20 / 0.2);
+  --border: rgb(10 10 12 / 0.1);
+  --border-strong: rgb(10 10 12 / 0.2);
 
   /* The same signal hue taken down far enough to sit on white — the dark
-     value would be invisible as text and unreadable as a fill. */
-  --accent: #0e7490;
-  --accent-hover: #0b6076;
-  --accent-text: #0b6e8c;
+     value would be too light as text and too light as a fill. */
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-text: #1d4ed8;
   --accent-foreground: #ffffff;
-  --accent-soft: rgb(14 116 144 / 0.1);
+  --accent-soft: rgb(37 99 235 / 0.1);
 
-  --positive: #047d5f;
-  --warning: #b4630b;
-  --danger: #d6294a;
+  --positive: #15803d;
+  --warning: #b45309;
+  --danger: #dc2626;
 
-  --ring: #0e7490;
-  --overlay: rgb(11 15 20 / 0.45);
+  --ring: #2563eb;
+  --overlay: rgb(10 10 12 / 0.45);
 
   --glass: linear-gradient(
     180deg,
@@ -97,11 +98,11 @@
     rgb(255 255 255 / 0.55) 100%
   );
   --panel-line: rgb(255 255 255 / 0.9);
-  --grid-line: rgb(11 15 20 / 0.035);
-  --chart-grid: rgb(11 15 20 / 0.08);
+  --grid-line: rgb(10 10 12 / 0.035);
+  --chart-grid: rgb(10 10 12 / 0.08);
 
-  --shadow-panel: 0 1px 2px rgb(11 15 20 / 0.05), 0 10px 30px -18px rgb(11 15 20 / 0.25);
-  --shadow-float: 0 1px 2px rgb(11 15 20 / 0.06), 0 24px 60px -24px rgb(11 15 20 / 0.3);
+  --shadow-panel: 0 1px 2px rgb(10 10 12 / 0.05), 0 10px 30px -18px rgb(10 10 12 / 0.25);
+  --shadow-float: 0 1px 2px rgb(10 10 12 / 0.06), 0 24px 60px -24px rgb(10 10 12 / 0.3);
 }
 
 @theme inline {
@@ -188,14 +189,14 @@ body {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(50% 60% at 20% 60%, rgb(53 214 255 / 0.1), transparent 70%),
-    radial-gradient(40% 55% at 76% 50%, rgb(49 230 168 / 0.055), transparent 70%);
+    radial-gradient(50% 60% at 20% 60%, rgb(46 111 240 / 0.16), transparent 70%),
+    radial-gradient(40% 55% at 76% 50%, rgb(34 197 94 / 0.05), transparent 70%);
 }
 
 :root[data-theme="light"] .aurora::before {
   background:
-    radial-gradient(50% 60% at 20% 60%, rgb(14 116 144 / 0.1), transparent 70%),
-    radial-gradient(40% 55% at 76% 50%, rgb(4 125 95 / 0.06), transparent 70%);
+    radial-gradient(50% 60% at 20% 60%, rgb(37 99 235 / 0.1), transparent 70%),
+    radial-gradient(40% 55% at 76% 50%, rgb(21 128 61 / 0.06), transparent 70%);
 }
 
 /* Numeric readouts: figures of equal width, so a value ticking from 9 to 10
@@ -217,13 +218,13 @@ body {
 
 /* The wordmark's gradient, used in the sidebar and on login. */
 .brand-mark {
-  background-image: linear-gradient(100deg, #f5f7fa 0%, #a5eeff 45%, #35d6ff 100%);
+  background-image: linear-gradient(100deg, #f7f8fa 0%, #9dc2ff 45%, #2e6ff0 100%);
   background-clip: text;
   color: transparent;
 }
 
 :root[data-theme="light"] .brand-mark {
-  background-image: linear-gradient(100deg, #0b0f14 0%, #0e7490 60%, #0891b2 100%);
+  background-image: linear-gradient(100deg, #0a0a0c 0%, #1d4ed8 60%, #2563eb 100%);
 }
 
 /* The halo on a live indicator. One animation, reused wherever a dot means
