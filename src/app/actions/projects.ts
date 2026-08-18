@@ -11,14 +11,32 @@ import { canEditProjectDetails, requireUser } from "@/lib/auth";
 export type Result = { ok: true } | { ok: false; error: string };
 
 /**
- * A project's own description and repository link.
+ * A project's own description, repository link and documentation link.
  *
  * Separate from `createProjectAction` in [actions/admin.ts] on purpose: name,
  * code and status are administrative — every order and cupboard is filed under
- * the code — while what the project *is* and where its firmware lives belong to
- * the person running it. Hence a different permission predicate and a different
- * action rather than widening the admin form.
+ * the code — while what the project *is*, where its firmware lives and where it
+ * is written up belong to the person running it. Hence a different permission
+ * predicate and a different action rather than widening the admin form.
+ *
+ * All three columns are cleared to `null` rather than `""`. A project nobody has
+ * described is a different thing from one described as nothing, and only the
+ * first should prompt.
  */
+
+/** One rule for both links, so a typo in either reads the same way. */
+const link = (label: string) =>
+  z
+    .string()
+    .trim()
+    .max(2000, "That link is too long.")
+    .transform((value) => (value === "" ? null : value))
+    .nullable()
+    .refine(
+      (value) => value === null || /^https?:\/\/\S+$/i.test(value),
+      `The ${label} needs to start with http:// or https://.`,
+    );
+
 const detailsSchema = z.object({
   projectId: z.string().uuid(),
   description: z
@@ -30,16 +48,8 @@ const detailsSchema = z.object({
     // prompt for a description.
     .transform((value) => (value === "" ? null : value))
     .nullable(),
-  repoUrl: z
-    .string()
-    .trim()
-    .max(2000, "That link is too long.")
-    .transform((value) => (value === "" ? null : value))
-    .nullable()
-    .refine(
-      (value) => value === null || /^https?:\/\/\S+$/i.test(value),
-      "The repository link needs to start with http:// or https://.",
-    ),
+  repoUrl: link("repository link"),
+  readmeUrl: link("documentation link"),
 });
 
 export type ProjectDetailsInput = z.input<typeof detailsSchema>;
@@ -63,7 +73,11 @@ export async function updateProjectDetailsAction(
 
     const updated = await db
       .update(projects)
-      .set({ description: data.description, repoUrl: data.repoUrl })
+      .set({
+        description: data.description,
+        repoUrl: data.repoUrl,
+        readmeUrl: data.readmeUrl,
+      })
       .where(eq(projects.id, data.projectId))
       .returning({ id: projects.id });
 

@@ -5,8 +5,10 @@ import { runQuery } from "@/db/rows";
 import { canManageInventory, canManageUsers, requireUser } from "@/lib/auth";
 import {
   ArchiveIcon,
+  BellIcon,
   LayersIcon,
   PackageIcon,
+  ReceiptIcon,
   UsersIcon,
 } from "@/components/icons";
 import { NoAccess, Page, PageHeader, StatCard } from "@/components/ui";
@@ -24,6 +26,8 @@ export default async function AdminPage() {
     projects: number;
     locations: number;
     people: number;
+    vendors: number;
+    unwatched: number;
   }>(
     db,
     sql`
@@ -31,7 +35,18 @@ export default async function AdminPage() {
         (SELECT count(*) FROM components)                       AS parts,
         (SELECT count(*) FROM projects WHERE status = 'active') AS projects,
         (SELECT count(*) FROM locations WHERE is_active)        AS locations,
-        (SELECT count(*) FROM users WHERE is_active)            AS people
+        (SELECT count(*) FROM users WHERE is_active)            AS people,
+        (SELECT count(*) FROM vendors)                          AS vendors,
+        -- Shelves holding stock with no minimum: the ones that can empty in
+        -- silence, because a low-stock alert needs something to be below.
+        (SELECT count(*) FROM stock_on_hand soh
+          JOIN location_tree lt ON lt.id = soh.location_id
+          WHERE lt.is_active AND soh.on_hand > 0
+            AND NOT EXISTS (
+              SELECT 1 FROM stock_thresholds st
+              WHERE st.component_id = soh.component_id
+                AND st.location_id  = soh.location_id
+            ))                                                    AS unwatched
     `,
   );
 
@@ -51,6 +66,27 @@ export default async function AdminPage() {
       tone: "positive" as const,
       hint: "Cupboards, shelves and bins, plus the general shelf.",
       count: counts?.locations,
+    },
+    {
+      href: "/admin/thresholds",
+      label: "Minimums",
+      icon: <BellIcon />,
+      tone: (Number(counts?.unwatched ?? 0) > 0 ? "warning" : "positive") as
+        | "warning"
+        | "positive",
+      hint:
+        Number(counts?.unwatched ?? 0) > 0
+          ? "Shelves with no minimum cannot raise an alert."
+          : "Every stocked shelf has a minimum.",
+      count: counts?.unwatched,
+    },
+    {
+      href: "/admin/vendors",
+      label: "Vendors",
+      icon: <ReceiptIcon />,
+      tone: "accent" as const,
+      hint: "Fix a name, or fold a duplicate into the one you keep.",
+      count: counts?.vendors,
     },
     {
       href: "/admin/projects",

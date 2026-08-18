@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 
 import { runQuery } from "@/db/rows";
 import type { Database } from "@/db/types";
+import { adminsAndProjectHeads } from "@/lib/alert-recipients";
 import { notify, type NotificationType } from "@/lib/notify";
 
 /**
@@ -66,35 +67,6 @@ async function readLine(
   };
 }
 
-/** Admins, plus heads of this cupboard's project. Never managers. */
-async function findRecipients(
-  db: Database,
-  projectId: string | null,
-): Promise<string[]> {
-  const rows = await runQuery<{ id: string }>(
-    db,
-    sql`
-      SELECT u.id
-      FROM users u
-      WHERE u.is_active
-        AND (
-          u.role = 'admin'
-          OR (
-            u.role = 'project_head'
-            AND ${projectId}::uuid IS NOT NULL
-            AND EXISTS (
-              SELECT 1 FROM project_leads pl
-              WHERE pl.user_id = u.id
-                AND pl.project_id = ${projectId}::uuid
-            )
-          )
-        )
-    `,
-  );
-
-  return rows.map((r) => r.id);
-}
-
 /**
  * Checks one component/location line and notifies if it has fallen too far.
  *
@@ -130,7 +102,7 @@ export async function checkStockAlerts(
       return;
     }
 
-    const recipients = await findRecipients(db, line.projectId);
+    const recipients = await adminsAndProjectHeads(db, line.projectId);
     if (recipients.length === 0) return;
 
     await notify(db, recipients, {

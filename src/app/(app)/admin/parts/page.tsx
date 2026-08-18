@@ -4,7 +4,12 @@ import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { runQuery } from "@/db/rows";
 import { canManageInventory, requireUser } from "@/lib/auth";
-import { PackageIcon, PencilIcon, PlusIcon } from "@/components/icons";
+import {
+  PackageIcon,
+  PencilIcon,
+  PlusIcon,
+  UploadIcon,
+} from "@/components/icons";
 import {
   Badge,
   Card,
@@ -15,6 +20,7 @@ import {
   PageHeader,
   TableWrap,
   primaryButtonClass,
+  secondaryButtonClass,
   tdClass,
   thClass,
   theadClass,
@@ -66,10 +72,16 @@ export default async function AdminPartsPage() {
         description="The catalogue. Quantities live in the ledger, not here."
         back={{ href: "/admin", label: "Admin" }}
         action={
-          <Link href="/admin/parts/new" className={primaryButtonClass}>
-            <PlusIcon size={16} />
-            Add part
-          </Link>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/admin/parts/new" className={primaryButtonClass}>
+              <PlusIcon size={16} />
+              Add part
+            </Link>
+            <Link href="/admin/parts/import" className={secondaryButtonClass}>
+              <UploadIcon size={16} />
+              Import a list
+            </Link>
+          </div>
         }
       />
 
@@ -77,12 +89,18 @@ export default async function AdminPartsPage() {
         <Card>
           <EmptyState
             title="No parts catalogued yet"
-            description="Add the first one, and fill in its search keywords generously — that is what makes it findable."
+            description="Add the first one, and fill in its search keywords generously — that is what makes it findable. An old spreadsheet can come in through Import a list."
             action={
-              <Link href="/admin/parts/new" className={primaryButtonClass}>
-                <PlusIcon size={16} />
-                Add part
-              </Link>
+              <div className="flex flex-wrap justify-center gap-3">
+                <Link href="/admin/parts/new" className={primaryButtonClass}>
+                  <PlusIcon size={16} />
+                  Add part
+                </Link>
+                <Link href="/admin/parts/import" className={secondaryButtonClass}>
+                  <UploadIcon size={16} />
+                  Import a list
+                </Link>
+              </div>
             }
           />
         </Card>

@@ -161,17 +161,36 @@ export async function createRequestAction(
 
 async function readForDecision(
   requestId: string,
-): Promise<{ projectId: string; status: string } | null> {
-  const rows = await runQuery<{ project_id: string; status: string }>(
+): Promise<{ projectId: string; status: string; qty: number } | null> {
+  const rows = await runQuery<{
+    project_id: string;
+    status: string;
+    qty: number | string;
+  }>(
     db,
-    sql`SELECT project_id, status FROM part_requests WHERE id = ${requestId}`,
+    sql`SELECT project_id, status, qty FROM part_requests WHERE id = ${requestId}`,
   );
   const row = rows[0];
-  return row ? { projectId: row.project_id, status: row.status } : null;
+  return row
+    ? { projectId: row.project_id, status: row.status, qty: Number(row.qty) }
+    : null;
 }
 
+/**
+ * Approves a request, optionally for fewer than were asked for.
+ *
+ * "Four, not ten" is a real decision and used to have nowhere to go: the head's
+ * only options were yes to the whole ask or a rejection, which sends the engineer
+ * back to raise the same request again with a smaller number.
+ *
+ * The amendment is recorded in `approved_qty` and the ask is left alone. What was
+ * wanted and what was granted are two facts, and overwriting `qty` to record the
+ * second would erase the evidence that a decision happened. An approval for the
+ * full amount writes nothing, so the common case stays a plain approval.
+ */
 export async function approveRequestAction(
   requestId: string,
+  options: { qty?: number | null; note?: string | null } = {},
 ): Promise<Result> {
   const auth = await requireSession();
   if (!auth.ok) return { ok: false, error: auth.error };
@@ -187,13 +206,28 @@ export async function approveRequestAction(
       };
     }
 
+    let approvedQty: number | null = null;
+    if (options.qty !== undefined && options.qty !== null) {
+      if (!Number.isInteger(options.qty) || options.qty <= 0) {
+        return {
+          ok: false,
+          error: "Approve a whole number of pieces, at least one.",
+        };
+      }
+      // Approving exactly what was asked for is not an amendment, so it is not
+      // recorded as one — otherwise every request would read "approved for 10 of
+      // 10" and the badge would stop meaning anything.
+      approvedQty = options.qty === existing.qty ? null : options.qty;
+    }
+
     const updated = await db
       .update(partRequests)
       .set({
         status: "approved",
         decidedBy: auth.user.id,
         decidedAt: new Date(),
-        decisionNote: null,
+        approvedQty,
+        decisionNote: options.note?.trim() || null,
       })
       .where(
         and(eq(partRequests.id, requestId), eq(partRequests.status, "pending")),
@@ -331,11 +365,12 @@ export async function convertRequestToOrderAction(
       project_id: string;
       component_id: string | null;
       qty: string | number;
+      approved_qty: string | number | null;
       status: string;
     }>(
       db,
       sql`
-        SELECT project_id, component_id, qty, status
+        SELECT project_id, component_id, qty, approved_qty, status
         FROM part_requests
         WHERE id = ${parsed.requestId}
       `,
@@ -357,7 +392,16 @@ export async function convertRequestToOrderAction(
       };
     }
 
-    const qty = parsed.qty ?? Number(existing.qty);
+    /**
+     * What to buy, in order of authority: the admin typing a number on the
+     * order form, then the quantity the head approved, then the ask.
+     *
+     * Ordering the full ask when the head cut it down would quietly overrule the
+     * decision this request exists to record.
+     */
+    const approved =
+      existing.approved_qty === null ? null : Number(existing.approved_qty);
+    const qty = parsed.qty ?? approved ?? Number(existing.qty);
     const vendorId = await resolveVendorByName(db, parsed.vendorName);
 
     const { orderId } = await insertOrderWithLines(

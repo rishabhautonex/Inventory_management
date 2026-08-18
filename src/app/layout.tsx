@@ -10,6 +10,13 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 export const metadata: Metadata = {
   title: "LabStock",
   description: "R&D lab inventory — what we have, where it is, who took it.",
+  icons: { icon: "/icon.svg", apple: "/icon.svg" },
+  /**
+   * iOS does not read `display: standalone` out of the manifest, so an install
+   * there needs telling separately. Without this the app opens in Safari with
+   * the address bar taking a row off the take-out flow.
+   */
+  appleWebApp: { capable: true, title: "LabStock", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = {

@@ -149,13 +149,20 @@ export async function setStockCountAction(input: {
   }
 }
 
-/** Putting an unused part back. */
+/**
+ * Putting an unused part back.
+ *
+ * Returns the movement id for the same reason `takeOutAction` does: the toast
+ * that reports a return offers Undo, and undoing needs something to point at.
+ * "Took five, used three" is the ordinary case, so the two halves of it are
+ * offered on the same terms.
+ */
 export async function returnStockAction(input: {
   componentId: string;
   locationId: string;
   qty: number;
   note?: string;
-}): Promise<ActionResult> {
+}): Promise<ActionResult<{ movementId: string }>> {
   const user = await getSessionUser();
   if (!user) return { ok: false, error: "Your session expired. Sign in again." };
 
@@ -164,7 +171,7 @@ export async function returnStockAction(input: {
   }
 
   try {
-    await recordMovement(db, {
+    const movement = await recordMovement(db, {
       componentId: input.componentId,
       locationId: input.locationId,
       qtyDelta: input.qty,
@@ -181,7 +188,7 @@ export async function returnStockAction(input: {
     revalidatePath("/log");
     revalidatePath(`/parts/${input.componentId}`);
 
-    return { ok: true };
+    return { ok: true, data: { movementId: movement.id } };
   } catch (error) {
     return fail(error);
   }

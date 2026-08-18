@@ -20,7 +20,9 @@ export type NotificationType =
   | "out_of_stock"
   | "order_overdue"
   | "request_pending"
-  | "request_decided";
+  | "request_decided"
+  /** The manager's weekly summary, in place of the per-event alerts. */
+  | "weekly_digest";
 
 export type NotificationDraft = {
   type: NotificationType;

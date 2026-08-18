@@ -45,6 +45,17 @@ export const env = {
   get INVOICE_BUCKET(): string {
     return process.env.INVOICE_BUCKET?.trim() || "invoices";
   },
+  /**
+   * Shared secret for the scheduled jobs, server-only and optional.
+   *
+   * Absent means the job routes refuse every caller rather than running
+   * unauthenticated: an open endpoint that writes notifications for the whole
+   * lab is worse than a job that has not been wired up yet. Vercel Cron sends
+   * it as `Authorization: Bearer <CRON_SECRET>` automatically.
+   */
+  get CRON_SECRET(): string | null {
+    return process.env.CRON_SECRET?.trim() || null;
+  },
   /** Empty means "any domain" — only sensible for local development. */
   get ALLOWED_EMAIL_DOMAINS(): string[] {
     return (process.env.ALLOWED_EMAIL_DOMAINS ?? "")

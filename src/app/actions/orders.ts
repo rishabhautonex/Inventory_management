@@ -1,11 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
-import { orders } from "@/db/schema";
+import { orderLines, orders } from "@/db/schema";
+import { runQuery } from "@/db/rows";
 import { getOrder, type OrderStatus } from "@/db/queries/orders";
 import { insertOrderWithLines, resolveVendorByName } from "@/lib/orders";
 import {
@@ -492,5 +493,228 @@ export async function suggestFromInvoiceAction(
     return { ok: true, data: { suggestions } };
   } catch (error) {
     return fail(error, "Matches could not be worked out.");
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Correcting the lines                                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * ===========================================================================
+ * Editing an order's lines.
+ *
+ * An order is an intention, not stock, which is exactly why its lines can be
+ * corrected at all: changing what was ordered writes nothing to the ledger and
+ * moves nothing on a shelf. A mistyped quantity, or a price read off the wrong
+ * column, used to mean cancelling the order and typing the whole thing again.
+ *
+ * The one thing a correction may not do is contradict the ledger. Receipts point
+ * at `order_lines.id`, and how much of a line has arrived is `SUM(qty_delta)`
+ * over its un-reversed receipts — so:
+ *
+ *   - a quantity may not fall below what has already been put away. Six pieces on
+ *     a shelf under a line claiming five were ordered is a record that disagrees
+ *     with the cupboard, and the cupboard is right.
+ *   - a line with receipts against it cannot be removed. Undo the receipt in the
+ *     log first; the reversal row is what that is for.
+ *   - nothing here touches `stock_movements`, which the architecture test enforces.
+ *
+ * A cancelled order is left alone entirely: it records a decision not to buy, and
+ * correcting its lines afterwards edits history for no benefit.
+ * ===========================================================================
+ */
+
+const lineEditSchema = z.object({
+  orderLineId: z.string().uuid(),
+  qty: z
+    .number()
+    .int("Quantities are whole pieces.")
+    .positive("A line needs a quantity of at least one."),
+  unitPrice: z.number().nonnegative("A price cannot be negative.").nullable(),
+});
+
+/** Re-derives whether every line has fully arrived, and moves the status to match. */
+async function reconcileShelvedStatus(orderId: string): Promise<void> {
+  const after = await getOrder(db, orderId);
+  if (!after || after.status === "cancelled") return;
+
+  const complete =
+    after.lines.length > 0 &&
+    after.lines.every((line) => line.remainingQty === 0);
+
+  // Raising a quantity on a finished order reopens it; lowering the last
+  // outstanding one closes it. Either way the status is derived from the lines
+  // rather than left asserting something the lines no longer support.
+  if (complete && after.status !== "shelved") {
+    await db
+      .update(orders)
+      .set({
+        status: "shelved",
+        shelvedAt: new Date(),
+        deliveredAt: after.deliveredAt ?? new Date(),
+      })
+      .where(eq(orders.id, orderId));
+  } else if (!complete && after.status === "shelved") {
+    await db
+      .update(orders)
+      .set({ status: "delivered", shelvedAt: null })
+      .where(eq(orders.id, orderId));
+  }
+}
+
+export async function updateOrderLineAction(
+  input: z.input<typeof lineEditSchema>,
+): Promise<Result> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return { ok: false, error: auth.error };
+
+  try {
+    const parsed = lineEditSchema.parse(input);
+
+    const rows = await runQuery<{ order_id: string }>(
+      db,
+      sql`SELECT order_id FROM order_lines WHERE id = ${parsed.orderLineId}`,
+    );
+    const orderId = rows[0]?.order_id;
+    if (!orderId) return { ok: false, error: "That line no longer exists." };
+
+    const order = await getOrder(db, orderId);
+    if (!order) return { ok: false, error: "That order no longer exists." };
+    if (order.status === "cancelled") {
+      return { ok: false, error: "This order was cancelled." };
+    }
+
+    const line = order.lines.find((l) => l.id === parsed.orderLineId);
+    if (!line) return { ok: false, error: "That line no longer exists." };
+
+    if (parsed.qty < line.shelvedQty) {
+      return {
+        ok: false,
+        error: `${line.shelvedQty} of these are already on a shelf. Undo that receipt in the log before lowering the quantity below it.`,
+      };
+    }
+
+    await db
+      .update(orderLines)
+      .set({
+        qty: parsed.qty,
+        unitPrice: parsed.unitPrice === null ? null : String(parsed.unitPrice),
+      })
+      .where(eq(orderLines.id, parsed.orderLineId));
+
+    await reconcileShelvedStatus(orderId);
+
+    revalidatePath("/orders");
+    revalidatePath(`/orders/${orderId}`);
+    return { ok: true };
+  } catch (error) {
+    return fail(error, "That line could not be changed.");
+  }
+}
+
+const addLineSchema = z.object({
+  orderId: z.string().uuid(),
+  componentId: z.string().uuid("Pick a catalogue part."),
+  qty: z
+    .number()
+    .int("Quantities are whole pieces.")
+    .positive("A line needs a quantity of at least one."),
+  unitPrice: z.number().nonnegative("A price cannot be negative.").nullable(),
+});
+
+/** Adds a line somebody missed when the order was typed. */
+export async function addOrderLineAction(
+  input: z.input<typeof addLineSchema>,
+): Promise<Result> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return { ok: false, error: auth.error };
+
+  try {
+    const parsed = addLineSchema.parse(input);
+
+    const order = await getOrder(db, parsed.orderId);
+    if (!order) return { ok: false, error: "That order no longer exists." };
+    if (order.status === "cancelled") {
+      return { ok: false, error: "This order was cancelled." };
+    }
+
+    await db.insert(orderLines).values({
+      orderId: parsed.orderId,
+      componentId: parsed.componentId,
+      qty: parsed.qty,
+      unitPrice: parsed.unitPrice === null ? null : String(parsed.unitPrice),
+    });
+
+    // A new line is outstanding by definition, so an order that read as shelved
+    // is not shelved any more.
+    await reconcileShelvedStatus(parsed.orderId);
+
+    revalidatePath("/orders");
+    revalidatePath(`/orders/${parsed.orderId}`);
+    return { ok: true };
+  } catch (error) {
+    return fail(error, "That line could not be added.");
+  }
+}
+
+/**
+ * Removes a line that should not be on the order.
+ *
+ * Refused once anything has been put away against it: the receipt is a ledger row
+ * pointing at this line, and deleting the line would leave stock on a shelf with
+ * nothing to explain where it came from. Undo in the log is the way out, and it
+ * appends a reversal rather than deleting anything.
+ *
+ * Also refused for the last line, because an order with no lines is not a record
+ * of a purchase. Cancelling says what actually happened.
+ */
+export async function removeOrderLineAction(
+  orderLineId: string,
+): Promise<Result> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return { ok: false, error: auth.error };
+
+  try {
+    const rows = await runQuery<{ order_id: string }>(
+      db,
+      sql`SELECT order_id FROM order_lines WHERE id = ${orderLineId}`,
+    );
+    const orderId = rows[0]?.order_id;
+    if (!orderId) return { ok: false, error: "That line no longer exists." };
+
+    const order = await getOrder(db, orderId);
+    if (!order) return { ok: false, error: "That order no longer exists." };
+    if (order.status === "cancelled") {
+      return { ok: false, error: "This order was cancelled." };
+    }
+
+    const line = order.lines.find((l) => l.id === orderLineId);
+    if (!line) return { ok: false, error: "That line no longer exists." };
+
+    if (line.shelvedQty > 0) {
+      return {
+        ok: false,
+        error: `${line.shelvedQty} of these are already on a shelf. Undo that receipt in the log first.`,
+      };
+    }
+
+    if (order.lines.length === 1) {
+      return {
+        ok: false,
+        error:
+          "This is the only line on the order. Cancel the order instead — an order with nothing on it is not a purchase.",
+      };
+    }
+
+    await db.delete(orderLines).where(eq(orderLines.id, orderLineId));
+
+    await reconcileShelvedStatus(orderId);
+
+    revalidatePath("/orders");
+    revalidatePath(`/orders/${orderId}`);
+    return { ok: true };
+  } catch (error) {
+    return fail(error, "That line could not be removed.");
   }
 }

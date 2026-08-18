@@ -26,6 +26,8 @@ type RequestSummary = {
   requesterName: string;
   label: string;
   qty: number;
+  /** What the head approved, when it differs from the ask. */
+  approvedQty: number | null;
   status: RequestStatus;
   decisionNote: string | null;
   deciderName: string | null;
@@ -43,6 +45,7 @@ async function readSummary(
     requester_name: string;
     label: string;
     qty: string | number;
+    approved_qty: string | number | null;
     status: RequestStatus;
     decision_note: string | null;
     decider_name: string | null;
@@ -57,6 +60,7 @@ async function readSummary(
         ru.name AS requester_name,
         COALESCE(c.name, r.free_text) AS label,
         r.qty,
+        r.approved_qty,
         r.status,
         r.decision_note,
         du.name AS decider_name
@@ -80,6 +84,7 @@ async function readSummary(
     requesterName: row.requester_name,
     label: row.label ?? "a part",
     qty: Number(row.qty),
+    approvedQty: row.approved_qty === null ? null : Number(row.approved_qty),
     status: row.status,
     decisionNote: row.decision_note,
     deciderName: row.decider_name,
@@ -116,7 +121,17 @@ async function findAdmins(db: Database): Promise<string[]> {
   return rows.map((r) => r.id);
 }
 
+/**
+ * What to call the request in a notification.
+ *
+ * An amended approval says both numbers. "Approved: 4 × ESP32" beside a request
+ * for ten reads as a mistake to the person who asked for ten; saying "4 of the
+ * 10 asked for" is the whole content of the decision.
+ */
 function quantityOf(summary: RequestSummary): string {
+  if (summary.approvedQty !== null && summary.approvedQty !== summary.qty) {
+    return `${summary.approvedQty} × ${summary.label} (${summary.qty} asked for)`;
+  }
   return `${summary.qty} × ${summary.label}`;
 }
 

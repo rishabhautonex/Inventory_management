@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="LabStock">
+  <!--
+    Maskable variant: the launcher crops this to whatever shape the platform
+    uses, so the ground bleeds to the full square and the glyph is kept inside
+    the inner 80% safe zone. Smaller glyph than icon.svg for exactly that reason
+    — an icon drawn to the edge loses its corners on a circular mask.
+  -->
+  <rect width="512" height="512" fill="#0B0F14" />
+  <g
+    transform="translate(153.6 153.6) scale(8.53)"
+    fill="none"
+    stroke="#35D6FF"
+    stroke-width="1.75"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  >
+    <path d="M12 2 3 7v10l9 5 9-5V7l-9-5Z" />
+    <path d="m3 7 9 5 9-5" />
+    <path d="M12 22V12" />
+  </g>
+</svg>

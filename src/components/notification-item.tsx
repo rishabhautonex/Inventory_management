@@ -4,7 +4,12 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { markNotificationReadAction } from "@/app/actions/notifications";
-import { AlertIcon, BellIcon, ClockIcon } from "@/components/icons";
+import {
+  AlertIcon,
+  BellIcon,
+  ClockIcon,
+  DashboardIcon,
+} from "@/components/icons";
 import { IconChip, type Tone } from "@/components/ui";
 import type { NotificationRow } from "@/db/queries/notifications";
 import { formatRelative } from "@/lib/format";
@@ -18,6 +23,8 @@ function decorate(type: string): { tone: Tone; icon: React.ReactNode } {
       return { tone: "warning", icon: <AlertIcon size={18} /> };
     case "order_overdue":
       return { tone: "warning", icon: <ClockIcon size={18} /> };
+    case "weekly_digest":
+      return { tone: "accent", icon: <DashboardIcon size={18} /> };
     default:
       return { tone: "accent", icon: <BellIcon size={18} /> };
   }
@@ -71,7 +78,12 @@ export function NotificationItem({
             {item.title}
           </p>
           {item.body ? (
-            <p className="mt-0.5 text-xs text-muted">{item.body}</p>
+            // `whitespace-pre-line` because the weekly digest is several
+            // sentences, one per line, and a collapsed body would run them
+            // together into a paragraph nobody scans.
+            <p className="mt-0.5 whitespace-pre-line text-xs text-muted">
+              {item.body}
+            </p>
           ) : null}
           <p className="mt-1 text-xs text-muted opacity-75">
             {formatRelative(item.createdAt)}

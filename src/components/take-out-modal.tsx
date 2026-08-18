@@ -3,8 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { takeOutAction } from "@/app/actions/stock";
-import { undoMovementAction } from "@/app/actions/stock";
+import {
+  returnStockAction,
+  takeOutAction,
+  undoMovementAction,
+} from "@/app/actions/stock";
 import { useToast } from "@/components/toast";
 
 export type TakeOutTarget = {
@@ -25,21 +28,31 @@ export type TakeOutTarget = {
  *
  * Skipping straight to the quantity step is what the part detail page's Use
  * button does, since the intent is already unambiguous by then.
+ *
+ * `mode: "return"` is the same two controls pointing the other way — "took five,
+ * used three" is the ordinary case, and it deserves the same number pad rather
+ * than a form somewhere else. A return has no "Using this?" step (nobody opens it
+ * by accident) and no ceiling from on-hand, because the pieces in the hand are
+ * not on the shelf to be counted.
  */
 export function TakeOutModal({
   target,
   startAtQuantity = false,
+  mode = "issue",
   onClose,
 }: {
   target: TakeOutTarget;
   startAtQuantity?: boolean;
+  mode?: "issue" | "return";
   onClose: () => void;
 }) {
   const router = useRouter();
   const toast = useToast();
 
+  const returning = mode === "return";
+
   const [step, setStep] = useState<"confirm" | "quantity">(
-    startAtQuantity ? "quantity" : "confirm",
+    startAtQuantity || returning ? "quantity" : "confirm",
   );
   const [qty, setQty] = useState(1);
   const [pending, setPending] = useState(false);
@@ -61,21 +74,29 @@ export function TakeOutModal({
   }, [step]);
 
   const max = target.onHand;
+  /** Nothing caps a return: the pieces are in a hand, not on the shelf. */
+  const ceiling = returning ? 9999 : Math.max(max, 1);
 
   function clamp(next: number) {
     if (Number.isNaN(next)) return 1;
-    return Math.min(Math.max(next, 1), Math.max(max, 1));
+    return Math.min(Math.max(next, 1), ceiling);
   }
 
   async function confirm() {
     setPending(true);
     setError(null);
 
-    const result = await takeOutAction({
-      componentId: target.componentId,
-      locationId: target.locationId,
-      qty,
-    });
+    const result = returning
+      ? await returnStockAction({
+          componentId: target.componentId,
+          locationId: target.locationId,
+          qty,
+        })
+      : await takeOutAction({
+          componentId: target.componentId,
+          locationId: target.locationId,
+          qty,
+        });
 
     if (!result.ok) {
       setError(result.error);
@@ -89,7 +110,9 @@ export function TakeOutModal({
 
     toast.show({
       tone: "success",
-      message: `Took ${qty} × ${target.componentName} from ${target.locationLabel}.`,
+      message: returning
+        ? `Put ${qty} × ${target.componentName} back in ${target.locationLabel}.`
+        : `Took ${qty} × ${target.componentName} from ${target.locationLabel}.`,
       action: {
         label: "Undo",
         run: async () => {
@@ -100,7 +123,7 @@ export function TakeOutModal({
           } else {
             toast.show({
               tone: "success",
-              message: `Put ${qty} back.`,
+              message: returning ? `Took ${qty} back out.` : `Put ${qty} back.`,
               duration: 4000,
             });
           }
@@ -124,7 +147,11 @@ export function TakeOutModal({
         className="safe-bottom w-full max-w-md rounded-t-2xl panel-glass p-5 sm:rounded-2xl"
       >
         <h2 id="take-out-title" className="text-lg font-semibold">
-          {step === "confirm" ? "Using this?" : "How many?"}
+          {step === "confirm"
+            ? "Using this?"
+            : returning
+              ? "How many back?"
+              : "How many?"}
         </h2>
 
         <p className="mt-1 text-sm text-muted">
@@ -176,7 +203,7 @@ export function TakeOutModal({
                 type="number"
                 inputMode="numeric"
                 min={1}
-                max={Math.max(max, 1)}
+                max={ceiling}
                 value={qty}
                 onChange={(e) => setQty(clamp(Number(e.target.value)))}
                 className="h-16 min-w-0 flex-1 rounded-xl border border-border bg-background text-center text-3xl font-semibold tabular-nums text-foreground outline-none [appearance:textfield] focus:border-accent [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
@@ -187,7 +214,7 @@ export function TakeOutModal({
                 type="button"
                 aria-label="One more"
                 onClick={() => setQty((q) => clamp(q + 1))}
-                disabled={qty >= max}
+                disabled={qty >= ceiling}
                 className="h-16 w-16 shrink-0 rounded-xl border border-border bg-surface-muted text-2xl font-semibold transition-colors hover:bg-surface-hover disabled:opacity-40"
               >
                 +
@@ -214,10 +241,16 @@ export function TakeOutModal({
               <button
                 type="button"
                 onClick={confirm}
-                disabled={pending || max < 1}
+                disabled={pending || (!returning && max < 1)}
                 className="min-h-14 rounded-xl bg-accent text-base font-semibold text-accent-foreground transition-colors hover:bg-accent-hover disabled:opacity-50 active:scale-[0.99]"
               >
-                {pending ? "Taking…" : `Take ${qty}`}
+                {pending
+                  ? returning
+                    ? "Putting back…"
+                    : "Taking…"
+                  : returning
+                    ? `Put ${qty} back`
+                    : `Take ${qty}`}
               </button>
             </div>
           </>

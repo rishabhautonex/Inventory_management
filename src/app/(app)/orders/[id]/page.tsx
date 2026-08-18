@@ -24,6 +24,7 @@ import {
 } from "@/components/ui";
 import { ORDER_STATUS_LABEL, ORDER_STATUS_TONE, orderRef } from "../order-ref";
 import { InvoicePanel } from "./invoice-panel";
+import { LineEditor } from "./line-editor";
 import { ShelvePanel } from "./shelve-panel";
 import { StatusActions } from "./status-actions";
 
@@ -174,6 +175,20 @@ export default async function OrderDetailPage({
                 ))}
               </tbody>
             </TableWrap>
+
+            {canBuy ? (
+              <LineEditor
+                orderId={order.id}
+                lines={order.lines.map((line) => ({
+                  id: line.id,
+                  componentName: line.componentName,
+                  qty: line.qty,
+                  unitPrice: line.unitPrice,
+                  shelvedQty: line.shelvedQty,
+                }))}
+                editable={order.status !== "cancelled"}
+              />
+            ) : null}
 
             {lineSum > 0 ? (
               <div className="flex flex-wrap justify-end gap-x-8 gap-y-1 border-t border-border px-4 py-4 text-sm sm:px-5">

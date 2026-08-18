@@ -63,6 +63,8 @@ export type RequestRow = {
   /** What the request is for, however it was expressed. */
   label: string;
   qty: number;
+  /** What the head approved, when that differs from the ask. Null means as asked. */
+  approvedQty: number | null;
   reason: string | null;
   status: RequestStatus;
   decidedById: string | null;
@@ -86,6 +88,7 @@ type RawRequestRow = {
   component_mpn: string | null;
   free_text: string | null;
   qty: number | string;
+  approved_qty: number | string | null;
   reason: string | null;
   status: RequestStatus;
   decided_by: string | null;
@@ -127,6 +130,7 @@ const SELECT_REQUEST = sql`
     c.mpn            AS component_mpn,
     r.free_text,
     r.qty,
+    r.approved_qty,
     r.reason,
     r.status,
     r.decided_by,
@@ -156,6 +160,7 @@ function toRow(r: RawRequestRow): RequestRow {
     freeText: r.free_text,
     label: r.component_name ?? r.free_text ?? "Unnamed part",
     qty: Number(r.qty),
+    approvedQty: r.approved_qty === null ? null : Number(r.approved_qty),
     reason: r.reason,
     status: r.status,
     decidedById: r.decided_by,

@@ -377,36 +377,71 @@ export async function listVendors(
   );
 }
 
-/** Full-text search over stored invoice text — what the OCR pass is *for*. */
+export type InvoiceMatch = {
+  orderId: string;
+  vendorName: string | null;
+  projectName: string | null;
+  status: OrderStatus;
+  orderDate: Date | null;
+  totalAmount: number | null;
+  /** Text either side of the first hit, so the reader sees why it matched. */
+  snippet: string;
+};
+
+/**
+ * Full-text search over stored invoice text — what the OCR pass is *for*.
+ *
+ * The spec's reason for keeping `invoice_ocr_text` at all is that a bill should
+ * be findable months later by something written on it: a part number nobody
+ * catalogued, a vendor's reference, a courier's docket. So this searches the
+ * text as filed and quotes the surrounding characters rather than reporting a
+ * bare hit — a match with no context is a match the reader has to open to judge.
+ *
+ * Scoped exactly like `listOrders`: a project head may search the invoices
+ * behind their own projects and nobody else's, and an empty project list matches
+ * nothing rather than everything.
+ */
 export async function searchInvoices(
   db: Database,
   query: string,
-  limit = 25,
-): Promise<Array<{ orderId: string; vendorName: string | null; snippet: string }>> {
+  options: { scope?: OrderScope; limit?: number } = {},
+): Promise<InvoiceMatch[]> {
   const trimmed = query.trim();
   if (trimmed === "") return [];
+
+  const scope = options.scope ?? null;
+  const limit = Math.min(options.limit ?? 25, 100);
 
   const rows = await runQuery<{
     order_id: string;
     vendor_name: string | null;
+    project_name: string | null;
+    status: OrderStatus;
+    order_date: string | Date | null;
+    total_amount: string | number | null;
     snippet: string;
   }>(
     db,
     sql`
       SELECT
-        o.id AS order_id,
-        v.name AS vendor_name,
-        -- A window around the first hit, so the reader sees why it matched.
+        o.id     AS order_id,
+        v.name   AS vendor_name,
+        p.name   AS project_name,
+        o.status,
+        COALESCE(o.order_date, o.created_at) AS order_date,
+        o.total_amount,
         substring(
           o.invoice_ocr_text
           FROM GREATEST(1, position(lower(${trimmed}) IN lower(o.invoice_ocr_text)) - 60)
           FOR 200
         ) AS snippet
       FROM orders o
-      LEFT JOIN vendors v ON v.id = o.vendor_id
+      LEFT JOIN vendors v  ON v.id = o.vendor_id
+      LEFT JOIN projects p ON p.id = o.project_id
       WHERE o.invoice_ocr_text IS NOT NULL
         AND o.invoice_ocr_text ILIKE '%' || ${trimmed} || '%'
-      ORDER BY o.created_at DESC
+        AND ${scopeClause(scope)}
+      ORDER BY COALESCE(o.order_date, o.created_at) DESC
       LIMIT ${limit}
     `,
   );
@@ -414,6 +449,82 @@ export async function searchInvoices(
   return rows.map((r) => ({
     orderId: r.order_id,
     vendorName: r.vendor_name,
-    snippet: r.snippet,
+    projectName: r.project_name,
+    status: r.status,
+    orderDate: r.order_date ? new Date(r.order_date) : null,
+    totalAmount: r.total_amount === null ? null : Number(r.total_amount),
+    snippet: (r.snippet ?? "").replace(/\s+/g, " ").trim(),
+  }));
+}
+
+export type OverdueOrderRow = {
+  id: string;
+  vendorName: string | null;
+  projectId: string | null;
+  projectName: string | null;
+  status: OrderStatus;
+  expectedDate: Date;
+  /** Whole days between the expected date and today, in lab time. */
+  daysLate: number;
+  lineCount: number;
+};
+
+/**
+ * Every order past its expected date and not yet in the building.
+ *
+ * Drives the daily job behind the spec's overdue-delivery notification, so it
+ * is unscoped on purpose — the job decides per order who hears about it, from
+ * the order's own project. `IS_OVERDUE` is the same predicate the list and the
+ * counts use, so a badge on screen and an alert in somebody's bell can never
+ * disagree about what "overdue" means.
+ *
+ * Lateness is measured in whole days in Asia/Kolkata rather than by subtracting
+ * timestamps: an order expected yesterday evening is one day late this morning,
+ * which is what the reader means by it.
+ */
+export async function listOverdueOrders(
+  db: Database,
+): Promise<OverdueOrderRow[]> {
+  const rows = await runQuery<{
+    id: string;
+    vendor_name: string | null;
+    project_id: string | null;
+    project_name: string | null;
+    status: OrderStatus;
+    expected_date: string | Date;
+    days_late: string | number;
+    line_count: string | number;
+  }>(
+    db,
+    sql`
+      SELECT
+        o.id,
+        v.name AS vendor_name,
+        o.project_id,
+        p.name AS project_name,
+        o.status,
+        o.expected_date,
+        (
+          (now() AT TIME ZONE 'Asia/Kolkata')::date
+          - (o.expected_date AT TIME ZONE 'Asia/Kolkata')::date
+        ) AS days_late,
+        (SELECT count(*) FROM order_lines ol WHERE ol.order_id = o.id) AS line_count
+      FROM orders o
+      LEFT JOIN vendors v ON v.id = o.vendor_id
+      LEFT JOIN projects p ON p.id = o.project_id
+      WHERE ${IS_OVERDUE}
+      ORDER BY o.expected_date
+    `,
+  );
+
+  return rows.map((r) => ({
+    id: r.id,
+    vendorName: r.vendor_name,
+    projectId: r.project_id,
+    projectName: r.project_name,
+    status: r.status,
+    expectedDate: new Date(r.expected_date),
+    daysLate: Number(r.days_late),
+    lineCount: Number(r.line_count),
   }));
 }

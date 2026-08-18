@@ -164,3 +164,80 @@ export async function getFilterOptions(db: Database) {
 
   return { people, projects, locations };
 }
+
+export type RecentTakeOut = {
+  componentId: string;
+  componentName: string;
+  locationId: string;
+  locationPath: string;
+  /** On-hand at that location now, which may be zero. */
+  onHand: number;
+  /** Pieces this person took from there over the window. */
+  unitsTaken: number;
+  lastAt: Date;
+};
+
+/**
+ * What this person has taken out lately, newest first.
+ *
+ * The home screen's idle state used to be a "start typing" prompt, which is the
+ * right answer for a stranger and the wrong one for somebody who takes the same
+ * three parts every day. This turns the repeat case into one tap and a number.
+ *
+ * An undone issue is left out: it was a mistake, not a habit, and offering it
+ * back would be the app remembering something the person already corrected.
+ */
+export async function listRecentTakeOuts(
+  db: Database,
+  userId: string,
+  limit = 6,
+  windowDays = 30,
+): Promise<RecentTakeOut[]> {
+  const rows = await runQuery<{
+    component_id: string;
+    component_name: string;
+    location_id: string;
+    location_path: string;
+    on_hand: string | number | null;
+    units_taken: string | number;
+    last_at: string | Date;
+  }>(
+    db,
+    sql`
+      SELECT
+        m.component_id,
+        c.name  AS component_name,
+        m.location_id,
+        lt.path AS location_path,
+        COALESCE(soh.on_hand, 0) AS on_hand,
+        SUM(-m.qty_delta)        AS units_taken,
+        MAX(m.created_at)        AS last_at
+      FROM stock_movements m
+      JOIN components c     ON c.id  = m.component_id
+      JOIN location_tree lt ON lt.id = m.location_id
+      LEFT JOIN stock_on_hand soh
+        ON soh.component_id = m.component_id
+       AND soh.location_id  = m.location_id
+      WHERE m.user_id = ${userId}
+        AND m.reason = 'issue'
+        AND lt.is_active
+        AND m.created_at >= now() - make_interval(days => ${windowDays})
+        AND NOT EXISTS (
+          SELECT 1 FROM stock_movements r WHERE r.reverses_movement_id = m.id
+        )
+      GROUP BY m.component_id, c.name, m.location_id, lt.path, soh.on_hand
+      ORDER BY last_at DESC
+      LIMIT ${limit}
+    `,
+  );
+
+  return rows.map((r) => ({
+    componentId: r.component_id,
+    componentName: r.component_name,
+    locationId: r.location_id,
+    locationPath: r.location_path,
+    onHand: Number(r.on_hand ?? 0),
+    unitsTaken: Number(r.units_taken),
+    lastAt: new Date(r.last_at),
+  }));
+}

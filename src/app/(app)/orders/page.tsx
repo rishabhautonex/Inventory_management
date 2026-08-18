@@ -4,12 +4,14 @@ import { db } from "@/db";
 import {
   getOrderCounts,
   listOrders,
+  searchInvoices,
+  type InvoiceMatch,
   type OrderScope,
   type OrderStatus,
 } from "@/db/queries/orders";
 import { canManageInventory, requireUser } from "@/lib/auth";
-import { formatDate } from "@/lib/format";
-import { PlusIcon, UploadIcon } from "@/components/icons";
+import { INR, formatDate } from "@/lib/format";
+import { PlusIcon, SearchIcon, UploadIcon } from "@/components/icons";
 import {
   Badge,
   Card,
@@ -17,7 +19,10 @@ import {
   NoAccess,
   Page,
   PageHeader,
+  Panel,
   TableWrap,
+  ghostButtonClass,
+  inputClass,
   primaryButtonClass,
   secondaryButtonClass,
   tdClass,
@@ -40,7 +45,7 @@ const STATUSES: OrderStatus[] = [
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; invoice?: string }>;
 }) {
   const user = await requireUser();
   const canBuy = canManageInventory(user);
@@ -61,9 +66,19 @@ export default async function OrdersPage({
     ? (params.status as OrderStatus)
     : undefined;
 
-  const [rows, counts] = await Promise.all([
+  /**
+   * Searching the invoices is a different question from filtering the list —
+   * "which bill mentions this?" rather than "what is outstanding?" — so it
+   * answers on its own and the status tabs step aside while it does.
+   */
+  const invoiceQuery = (params.invoice ?? "").trim();
+
+  const [rows, counts, invoiceMatches] = await Promise.all([
     listOrders(db, { status, scope }),
     getOrderCounts(db, scope),
+    invoiceQuery === ""
+      ? Promise.resolve([])
+      : searchInvoices(db, invoiceQuery, { scope }),
   ]);
 
   return (
@@ -90,6 +105,12 @@ export default async function OrdersPage({
           ) : undefined
         }
       />
+
+      <InvoiceSearch query={invoiceQuery} />
+
+      {invoiceQuery !== "" ? (
+        <InvoiceResults query={invoiceQuery} matches={invoiceMatches} />
+      ) : null}
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <StatusTab active={!status} href="/orders" label="All" />
@@ -200,6 +221,110 @@ export default async function OrdersPage({
         </TableWrap>
       )}
     </Page>
+  );
+}
+
+/**
+ * Search the text read off the invoices.
+ *
+ * A plain GET form rather than a client component: the answer is a page of
+ * server-rendered rows either way, and this keeps the result shareable as a URL
+ * and working with no JavaScript. `defaultValue` rather than `value` because
+ * nothing here is controlled — the input is the query, the URL is the state.
+ */
+function InvoiceSearch({ query }: { query: string }) {
+  return (
+    <form method="get" action="/orders" className="mb-4 flex flex-wrap gap-2">
+      <div className="relative min-w-0 flex-1">
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted">
+          <SearchIcon size={16} />
+        </span>
+        <input
+          type="search"
+          name="invoice"
+          defaultValue={query}
+          placeholder="Search inside invoices — a part number, a docket, a vendor reference"
+          aria-label="Search invoice text"
+          className={`${inputClass} pl-9`}
+        />
+      </div>
+      <button type="submit" className={secondaryButtonClass}>
+        Search
+      </button>
+      {query !== "" ? (
+        <Link href="/orders" className={ghostButtonClass}>
+          Clear
+        </Link>
+      ) : null}
+    </form>
+  );
+}
+
+/**
+ * What the OCR text is for.
+ *
+ * Only orders whose invoice was actually read can match, so an empty result is
+ * reported as "no invoice text mentions this" rather than "no orders" — the
+ * difference matters when the bill is a photo the extractor could not read, and
+ * saying the wrong one sends somebody looking for an order that does exist.
+ */
+function InvoiceResults({
+  query,
+  matches,
+}: {
+  query: string;
+  matches: InvoiceMatch[];
+}) {
+  return (
+    <Panel
+      className="mb-6"
+      title={`Invoice text matching “${query}”`}
+      action={
+        matches.length === 0 ? undefined : (
+          <span className="text-xs text-muted">
+            {matches.length} {matches.length === 1 ? "invoice" : "invoices"}
+          </span>
+        )
+      }
+    >
+      {matches.length === 0 ? (
+        <EmptyState
+          title="No stored invoice text mentions that"
+          description="Only invoices the extractor could read are searchable. A photo that came back blank is still attached to its order — open the order to look at it."
+        />
+      ) : (
+        <ul className="divide-y divide-border">
+          {matches.map((match) => (
+            <li key={match.orderId}>
+              <Link
+                href={`/orders/${match.orderId}`}
+                className="block px-1 py-3 transition-colors hover:bg-surface-hover"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono text-xs font-semibold text-accent-text">
+                    {orderRef(match.orderId)}
+                  </span>
+                  <Badge tone={ORDER_STATUS_TONE[match.status]}>
+                    {ORDER_STATUS_LABEL[match.status]}
+                  </Badge>
+                  <span className="text-sm">{match.vendorName ?? "No vendor"}</span>
+                  <span className="text-xs text-muted">
+                    {match.projectName ?? "General"}
+                    {match.orderDate ? ` · ${formatDate(match.orderDate)}` : ""}
+                    {match.totalAmount === null
+                      ? ""
+                      : ` · ${INR.format(match.totalAmount)}`}
+                  </span>
+                </div>
+                <p className="mt-1 line-clamp-2 text-xs text-muted">
+                  …{match.snippet}…
+                </p>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
   );
 }
 

@@ -106,6 +106,17 @@ export const projects = pgTable(
     description: text("description"),
     /** Where the firmware lives. Validated as an http(s) URL before it lands. */
     repoUrl: text("repo_url"),
+    /**
+     * The project's written-up documentation — a README, a wiki page, a design
+     * doc in Drive.
+     *
+     * A link rather than stored text, and separate from `repo_url` rather than
+     * derived from it. Derived would be a lie for a private repo, for a project
+     * whose notes live outside Git, and for a monorepo whose README is three
+     * directories down; and copying the file in would leave the app serving a
+     * README that stopped matching the code the day after it was pasted.
+     */
+    readmeUrl: text("readme_url"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -473,6 +484,16 @@ export const partRequests = pgTable(
     qty: integer("qty").notNull(),
     reason: text("reason"),
     status: requestStatusEnum("status").notNull().default("pending"),
+    /**
+     * How many the head actually approved, when that differs from the ask.
+     *
+     * A separate column rather than an edit to `qty`, for the reason the ledger
+     * is append-only: what somebody asked for and what they were granted are two
+     * facts, and overwriting the first to record the second loses the only
+     * evidence that a decision was made at all. Null means "as asked", so an
+     * ordinary approval writes nothing here.
+     */
+    approvedQty: integer("approved_qty"),
     decidedBy: uuid("decided_by").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -491,6 +512,11 @@ export const partRequests = pgTable(
     index("part_requests_project_idx").on(t.projectId),
     index("part_requests_requested_by_idx").on(t.requestedBy),
     check("part_requests_qty_positive", sql`${t.qty} > 0`),
+    // An approval for zero is a rejection, and rejections need a note.
+    check(
+      "part_requests_approved_qty_positive",
+      sql`${t.approvedQty} IS NULL OR ${t.approvedQty} > 0`,
+    ),
     // Exactly one of component_id / free_text identifies what is wanted.
     check(
       "part_requests_target",

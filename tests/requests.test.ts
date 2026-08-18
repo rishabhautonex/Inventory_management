@@ -310,6 +310,71 @@ describe("who hears about a request", () => {
     assert.match(admin[0].title, /Ready to order/);
   });
 
+  test("an approval for fewer says both numbers, and keeps the ask", async () => {
+    const [row] = await db
+      .insert(partRequests)
+      .values({
+        requestedBy: ids.engineer,
+        projectId: ids.falcon,
+        componentId: ids.esp,
+        qty: 10,
+        reason: "spares for the field trial",
+      })
+      .returning();
+
+    await db
+      .update(partRequests)
+      .set({
+        status: "approved",
+        decidedBy: ids.falconHead,
+        decidedAt: new Date(),
+        approvedQty: 4,
+      })
+      .where(eq(partRequests.id, row.id));
+
+    await notifyRequestDecided(db, row.id);
+
+    const [stored] = await db
+      .select()
+      .from(partRequests)
+      .where(eq(partRequests.id, row.id));
+
+    // The ask survives the decision: what was wanted and what was granted are
+    // two facts, and the second must not overwrite the first.
+    assert.equal(stored.qty, 10);
+    assert.equal(stored.approvedQty, 4);
+
+    const requester = await notificationsFor(ids.engineer, "request_decided");
+    // By link, not by title: this engineer has decisions on other requests too.
+    const approval = requester.find((n) => n.linkUrl === `/requests/${row.id}`);
+    assert.ok(approval, "the requester should hear about it");
+    assert.match(approval.title, /4 ×/);
+    assert.match(approval.title, /10 asked for/);
+  });
+
+  test("approving for zero is refused by the database", async () => {
+    const [row] = await db
+      .insert(partRequests)
+      .values({
+        requestedBy: ids.engineer,
+        projectId: ids.falcon,
+        componentId: ids.esp,
+        qty: 6,
+      })
+      .returning();
+
+    // An approval for none of them is a rejection, and a rejection needs a note.
+    await assert.rejects(
+      () =>
+        db
+          .update(partRequests)
+          .set({ status: "approved", approvedQty: 0 })
+          .where(eq(partRequests.id, row.id)),
+      (error: unknown) =>
+        /part_requests_approved_qty_positive/.test(errorText(error)),
+    );
+  });
+
   test("a rejection carries the reason to the requester", async () => {
     const [row] = await db
       .insert(partRequests)

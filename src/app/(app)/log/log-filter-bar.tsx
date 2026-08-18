@@ -24,9 +24,12 @@ const KEYS = ["person", "project", "location", "reason", "from", "to"];
 export function LogFilterBar({
   options,
   reasons,
+  currentUserId,
 }: {
   options: Options;
   reasons: MovementReason[];
+  /** Powers the "Just mine" toggle, which is the filter people want most. */
+  currentUserId: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -42,23 +45,42 @@ export function LogFilterBar({
   }
 
   const activeCount = KEYS.filter((key) => searchParams.get(key)).length;
+  const mine = searchParams.get("person") === currentUserId;
 
   return (
     <div className="panel rounded-xl">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex min-h-12 w-full items-center gap-2.5 px-4 text-sm font-medium text-muted transition-colors hover:text-foreground"
-      >
-        <FilterIcon size={18} />
-        Filters
-        {activeCount > 0 ? <Badge tone="accent">{activeCount}</Badge> : null}
-        <ChevronDownIcon
-          size={18}
-          className={`ml-auto transition-transform ${open ? "rotate-180" : ""}`}
-        />
-      </button>
+      <div className="flex min-h-12 items-center gap-2 px-4">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="flex min-h-12 flex-1 items-center gap-2.5 text-left text-sm font-medium text-muted transition-colors hover:text-foreground"
+        >
+          <FilterIcon size={18} />
+          Filters
+          {activeCount > 0 ? <Badge tone="accent">{activeCount}</Badge> : null}
+          <ChevronDownIcon
+            size={18}
+            className={`ml-auto transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        </button>
+
+        {/* One tap for the question almost everybody opens this page to ask:
+            what did *I* take? It writes the same `person` filter the select
+            writes, so the two can never disagree about what is applied. */}
+        <button
+          type="button"
+          onClick={() => update("person", mine ? "" : currentUserId)}
+          aria-pressed={mine}
+          className={`inline-flex min-h-11 shrink-0 items-center rounded-lg border px-3.5 text-sm font-medium transition-colors ${
+            mine
+              ? "border-accent/40 bg-accent-soft text-accent-text"
+              : "border-border text-muted hover:bg-surface-hover hover:text-foreground"
+          }`}
+        >
+          Just mine
+        </button>
+      </div>
 
       {open ? (
         <div className="grid grid-cols-1 gap-4 border-t border-border p-4 sm:grid-cols-2 lg:grid-cols-3">

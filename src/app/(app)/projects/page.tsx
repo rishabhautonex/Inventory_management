@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { listProjects } from "@/db/queries/projects";
 import { canManageInventory, canManageProjectBom, requireUser } from "@/lib/auth";
 import { INR } from "@/lib/format";
-import { GithubIcon, UploadIcon } from "@/components/icons";
+import { DocumentIcon, GithubIcon, UploadIcon } from "@/components/icons";
 import {
   Badge,
   Card,
@@ -107,6 +107,17 @@ export default async function ProjectsPage() {
                       >
                         <GithubIcon size={13} />
                         Repo
+                      </a>
+                    ) : null}
+                    {project.readmeUrl ? (
+                      <a
+                        href={project.readmeUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-accent-text hover:underline"
+                      >
+                        <DocumentIcon size={13} />
+                        Docs
                       </a>
                     ) : null}
                   </p>

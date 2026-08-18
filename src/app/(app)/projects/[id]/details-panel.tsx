@@ -5,7 +5,12 @@ import { useRouter } from "next/navigation";
 
 import { updateProjectDetailsAction } from "@/app/actions/projects";
 import { useToast } from "@/components/toast";
-import { ExternalLinkIcon, GithubIcon, PencilIcon } from "@/components/icons";
+import {
+  DocumentIcon,
+  ExternalLinkIcon,
+  GithubIcon,
+  PencilIcon,
+} from "@/components/icons";
 import {
   ErrorText,
   Field,
@@ -16,22 +21,30 @@ import {
 } from "@/components/ui";
 
 /**
- * What the project is, and where its code lives.
+ * What the project is, where its code lives, and where it is written up.
  *
  * Read-only for anybody who can see the project; editable by its heads and by
  * admins. The form is the same panel rather than a separate page: a description
  * is a sentence or two, and sending somebody to /admin to write it is how it
  * ends up never written.
+ *
+ * The documentation link is stored, not derived. When it is empty and the repo is
+ * on GitHub the panel offers GitHub's own `#readme` anchor instead — labelled as
+ * a guess, because a monorepo's README is rarely at the root and a private repo
+ * will simply refuse the reader. A guess offered as a guess is useful; the same
+ * guess presented as the project's documentation is not.
  */
 export function ProjectDetailsPanel({
   projectId,
   description,
   repoUrl,
+  readmeUrl,
   canEdit,
 }: {
   projectId: string;
   description: string | null;
   repoUrl: string | null;
+  readmeUrl: string | null;
   canEdit: boolean;
 }) {
   const router = useRouter();
@@ -43,6 +56,7 @@ export function ProjectDetailsPanel({
 
   const [draftDescription, setDraftDescription] = useState(description ?? "");
   const [draftRepoUrl, setDraftRepoUrl] = useState(repoUrl ?? "");
+  const [draftReadmeUrl, setDraftReadmeUrl] = useState(readmeUrl ?? "");
 
   function save() {
     setError(null);
@@ -51,6 +65,7 @@ export function ProjectDetailsPanel({
         projectId,
         description: draftDescription,
         repoUrl: draftRepoUrl,
+        readmeUrl: draftReadmeUrl,
       });
 
       if (!result.ok) {
@@ -69,9 +84,16 @@ export function ProjectDetailsPanel({
     // leave no trace of itself.
     setDraftDescription(description ?? "");
     setDraftRepoUrl(repoUrl ?? "");
+    setDraftReadmeUrl(readmeUrl ?? "");
     setError(null);
     setEditing(false);
   }
+
+  /** GitHub renders a repo's README at this anchor. Offered, never stored. */
+  const guessedReadme =
+    readmeUrl === null && repoUrl !== null && isGithub(repoUrl)
+      ? `${repoUrl.replace(/\/+$/, "")}#readme`
+      : null;
 
   return (
     <section className="panel rounded-xl">
@@ -88,7 +110,7 @@ export function ProjectDetailsPanel({
             className={secondaryButtonClass}
           >
             <PencilIcon size={16} />
-            {description || repoUrl ? "Edit" : "Add details"}
+            {description || repoUrl || readmeUrl ? "Edit" : "Add details"}
           </button>
         ) : null}
       </header>
@@ -120,6 +142,20 @@ export function ProjectDetailsPanel({
                 value={draftRepoUrl}
                 onChange={(event) => setDraftRepoUrl(event.target.value)}
                 placeholder="https://github.com/org/repo"
+              />
+            </Field>
+
+            <Field
+              label="README or docs"
+              hint="Wherever this project is actually written up — a README in the repo, a wiki page, a doc in Drive. Leave it empty and a GitHub repo's own README is offered instead."
+            >
+              <input
+                type="url"
+                inputMode="url"
+                className={inputClass}
+                value={draftReadmeUrl}
+                onChange={(event) => setDraftReadmeUrl(event.target.value)}
+                placeholder="https://github.com/org/repo/blob/main/README.md"
               />
             </Field>
 
@@ -158,23 +194,84 @@ export function ProjectDetailsPanel({
               </p>
             )}
 
-            {repoUrl ? (
-              <a
-                href={repoUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-border px-3.5 text-sm font-medium text-accent-text transition-colors hover:bg-surface-hover"
-              >
-                <GithubIcon size={16} />
-                {repoLabel(repoUrl)}
-                <ExternalLinkIcon size={14} />
-              </a>
+            {repoUrl || readmeUrl || guessedReadme ? (
+              <div className="flex flex-wrap gap-2">
+                {repoUrl ? (
+                  <LinkChip href={repoUrl} icon={<GithubIcon size={16} />}>
+                    {repoLabel(repoUrl)}
+                  </LinkChip>
+                ) : null}
+
+                {readmeUrl ? (
+                  <LinkChip href={readmeUrl} icon={<DocumentIcon size={16} />}>
+                    README
+                  </LinkChip>
+                ) : guessedReadme ? (
+                  <LinkChip
+                    href={guessedReadme}
+                    icon={<DocumentIcon size={16} />}
+                    muted
+                    title="Not set for this project — this is GitHub's own README anchor for the repo above."
+                  >
+                    README on GitHub
+                  </LinkChip>
+                ) : null}
+              </div>
+            ) : null}
+
+            {canEdit && !readmeUrl && !guessedReadme ? (
+              <p className="text-xs text-muted">
+                No documentation link yet. A README or a design doc is what stops
+                the next person rebuilding what this project already knows.
+              </p>
             ) : null}
           </>
         )}
       </div>
     </section>
   );
+}
+
+/** One outbound link, sized for a thumb. */
+function LinkChip({
+  href,
+  icon,
+  children,
+  muted = false,
+  title,
+}: {
+  href: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+  /** For a link we inferred rather than one somebody set. */
+  muted?: boolean;
+  title?: string;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={title}
+      className={`inline-flex min-h-11 items-center gap-2 rounded-lg border border-border px-3.5 text-sm font-medium transition-colors hover:bg-surface-hover ${
+        muted ? "text-muted" : "text-accent-text"
+      }`}
+    >
+      {icon}
+      {children}
+      <ExternalLinkIcon size={14} />
+    </a>
+  );
+}
+
+/** True for a github.com URL, which is the only host whose README we can guess. */
+function isGithub(url: string): boolean {
+  try {
+    const host = new URL(url).host.toLowerCase();
+    return host === "github.com" || host.endsWith(".github.com");
+  } catch {
+    return false;
+  }
 }
 
 /**

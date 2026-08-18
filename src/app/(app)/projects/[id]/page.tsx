@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { db } from "@/db";
 import { getBomShortfall, listProjectBoms } from "@/db/queries/bom";
+import { listMovements } from "@/db/queries/movements";
 import { listOrders } from "@/db/queries/orders";
 import {
   getProject,
@@ -17,7 +18,13 @@ import {
   canViewProject,
   requireUser,
 } from "@/lib/auth";
-import { INR, formatDate, formatRelative } from "@/lib/format";
+import {
+  INR,
+  formatDate,
+  formatDelta,
+  formatReason,
+  formatRelative,
+} from "@/lib/format";
 import {
   AlertIcon,
   CubeIcon,
@@ -90,15 +97,21 @@ export default async function ProjectPage({
   const canOrder = canManageInventory(user);
   const canEditDetails = canEditProjectDetails(user, project.id);
 
-  const [boms, stock, attention, requests, orders] = await Promise.all([
-    listProjectBoms(db, project.id),
-    getProjectStock(db, project.id),
-    getProjectAttention(db, project.id),
-    listRequests(db, visibilityFor(user), { projectId: project.id, limit: 20 }),
-    // Scoped to this project, so no visibility question arises: anybody who got
-    // this far can see the project, and these are its own orders.
-    listOrders(db, { projectId: project.id, limit: 10 }),
-  ]);
+  const [boms, stock, attention, requests, orders, movements] =
+    await Promise.all([
+      listProjectBoms(db, project.id),
+      getProjectStock(db, project.id),
+      getProjectAttention(db, project.id),
+      listRequests(db, visibilityFor(user), { projectId: project.id, limit: 20 }),
+      // Scoped to this project, so no visibility question arises: anybody who got
+      // this far can see the project, and these are its own orders.
+      listOrders(db, { projectId: project.id, limit: 10 }),
+      // What the cupboard has actually been doing. The stock table answers "what
+      // is there"; a head also has to answer "where did it go", and until this
+      // panel existed the only route to that was the lab-wide log with a filter
+      // somebody had to know to apply.
+      listMovements(db, { projectId: project.id, limit: 10 }),
+    ]);
 
   const empties = attention.filter((line) => line.onHand <= 0).length;
 
@@ -176,6 +189,7 @@ export default async function ProjectPage({
           projectId={project.id}
           description={project.description}
           repoUrl={project.repoUrl}
+          readmeUrl={project.readmeUrl}
           canEdit={canEditDetails}
         />
 
@@ -338,6 +352,64 @@ export default async function ProjectPage({
                   <Badge tone={REQUEST_STATUS_TONE[request.status]}>
                     {REQUEST_STATUS_LABEL[request.status]}
                   </Badge>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+
+        <Panel
+          title="Coming and going"
+          action={
+            <Link
+              href={`/log?project=${project.id}`}
+              className="text-xs font-medium text-accent-text hover:underline"
+            >
+              Full log
+            </Link>
+          }
+        >
+          {movements.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted">
+              Nothing has moved on this project&apos;s shelves yet.
+            </p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {movements.map((entry) => (
+                <li
+                  key={entry.id}
+                  className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0"
+                >
+                  <span
+                    className={`w-12 shrink-0 text-right text-sm font-semibold tabular-nums ${
+                      entry.isReversed
+                        ? "text-muted line-through"
+                        : entry.qtyDelta < 0
+                          ? "text-accent-text"
+                          : "text-positive"
+                    }`}
+                  >
+                    {formatDelta(entry.qtyDelta)}
+                  </span>
+
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      href={`/parts/${entry.componentId}`}
+                      className="block truncate text-sm font-medium hover:underline"
+                    >
+                      {entry.componentName}
+                    </Link>
+                    <p className="truncate text-xs text-muted">
+                      {formatReason(entry.reason)}
+                      {entry.userName ? ` · ${entry.userName}` : ""}
+                      <span className="mx-1 opacity-50">·</span>
+                      {entry.locationPath}
+                    </p>
+                  </div>
+
+                  <span className="shrink-0 text-xs text-muted">
+                    {formatRelative(entry.createdAt)}
+                  </span>
                 </li>
               ))}
             </ul>

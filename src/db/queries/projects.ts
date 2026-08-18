@@ -37,6 +37,8 @@ export type ProjectRow = {
   /** What the project is, as its head wrote it. Null when nobody has said. */
   description: string | null;
   repoUrl: string | null;
+  /** Where the project is written up — a README, a wiki, a design doc. */
+  readmeUrl: string | null;
   leads: Array<{ id: string; name: string }>;
   /** Locations that resolve to this project, at any depth. */
   locationCount: number;
@@ -55,6 +57,7 @@ type RawProjectRow = {
   status: "active" | "closed";
   description: string | null;
   repo_url: string | null;
+  readme_url: string | null;
   leads: Array<{ id: string; name: string }> | null;
   location_count: string | number;
   distinct_parts: string | number;
@@ -73,6 +76,7 @@ const SELECT_PROJECT = sql`
     p.status,
     p.description,
     p.repo_url,
+    p.readme_url,
     COALESCE((
       SELECT json_agg(json_build_object('id', u.id, 'name', u.name) ORDER BY u.name)
       FROM project_leads pl
@@ -116,6 +120,7 @@ function toRow(r: RawProjectRow): ProjectRow {
     status: r.status,
     description: r.description,
     repoUrl: r.repo_url,
+    readmeUrl: r.readme_url,
     leads: r.leads ?? [],
     locationCount: Number(r.location_count),
     distinctParts: Number(r.distinct_parts),

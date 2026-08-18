@@ -136,6 +136,18 @@ export default async function RequestPage({
                 by {request.decidedByName ?? "somebody since removed"} on{" "}
                 {formatDateTime(request.decidedAt)}.
               </p>
+
+              {/* Both numbers, because the ask is not overwritten when a head
+                  approves fewer — and "4" next to a request for 10 reads as an
+                  error unless it says which is which. */}
+              {request.approvedQty !== null &&
+              request.approvedQty !== request.qty ? (
+                <p className="mt-2 text-sm">
+                  <Badge tone="warning">
+                    {request.approvedQty} of {request.qty} approved
+                  </Badge>
+                </p>
+              ) : null}
               {request.decisionNote ? (
                 <div className="mt-3 rounded-lg border border-border bg-surface-muted p-3.5">
                   <p className="text-sm whitespace-pre-wrap">
@@ -163,13 +175,21 @@ export default async function RequestPage({
         </div>
 
         <div className="space-y-4">
-          {canDecide ? <DecisionPanel requestId={request.id} /> : null}
+          {canDecide ? (
+            <DecisionPanel
+              requestId={request.id}
+              askedQty={request.qty}
+              label={request.label}
+            />
+          ) : null}
 
           {canOrder ? (
             request.componentId ? (
               <ConvertPanel
                 requestId={request.id}
-                qty={request.qty}
+                // What the head approved, not what was asked for. Buying the
+                // full ask when it was cut down would overrule the decision.
+                qty={request.approvedQty ?? request.qty}
                 vendors={vendors}
               />
             ) : (

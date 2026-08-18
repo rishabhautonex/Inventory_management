@@ -425,5 +425,44 @@ describe("project details", () => {
 
     assert.equal(project?.description, null);
     assert.equal(project?.repoUrl, null);
+    assert.equal(project?.readmeUrl, null);
+  });
+
+  test("the documentation link is its own column, not derived from the repo", async () => {
+    const f = await makeFixtures(db);
+
+    // A monorepo's README is rarely at the repo root and a private repo will
+    // refuse the reader outright, so the link somebody set is the only one the
+    // record may claim as this project's documentation.
+    await db
+      .update(projects)
+      .set({
+        repoUrl: "https://github.com/autonex/fleet",
+        readmeUrl: "https://github.com/autonex/fleet/blob/main/soil/README.md",
+      })
+      .where(eq(projects.id, f.project.id));
+
+    const project = await getProject(db, f.project.id);
+
+    assert.equal(project?.repoUrl, "https://github.com/autonex/fleet");
+    assert.equal(
+      project?.readmeUrl,
+      "https://github.com/autonex/fleet/blob/main/soil/README.md",
+    );
+  });
+
+  test("a repo with no documentation link leaves readmeUrl null", async () => {
+    const f = await makeFixtures(db);
+
+    await db
+      .update(projects)
+      .set({ repoUrl: "https://github.com/autonex/soil-sensor" })
+      .where(eq(projects.id, f.project.id));
+
+    const project = await getProject(db, f.project.id);
+
+    // The panel offers GitHub's own #readme anchor in this case, but it is
+    // offered as a guess and never written to the row.
+    assert.equal(project?.readmeUrl, null);
   });
 });

@@ -4,9 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { TakeOutModal, type TakeOutTarget } from "@/components/take-out-modal";
-import { SearchIcon, XIcon } from "@/components/icons";
+import { MovementsIcon, SearchIcon, XIcon } from "@/components/icons";
 import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
+import type { RecentTakeOut } from "@/db/queries/movements";
 import type { SearchHit } from "@/db/queries/search";
+import { formatRelative } from "@/lib/format";
 
 /**
  * Screen 1 — the default landing page.
@@ -14,8 +16,14 @@ import type { SearchHit } from "@/db/queries/search";
  * The search box is focused on mount and each result is one component at one
  * location, so the sequence from opening the app to a recorded movement is:
  * type, tap the row, tap Yes, confirm the number.
+ *
+ * With the box empty it shows what this person took out lately rather than a
+ * "start typing" placard. For the repeat case — the same three parts every day —
+ * that is one tap and a number, a step shorter than searching. It is also where
+ * a return belongs: somebody who took five and used three is looking straight at
+ * the row that says they took five.
  */
-export function SearchScreen() {
+export function SearchScreen({ recent = [] }: { recent?: RecentTakeOut[] }) {
   const router = useRouter();
 
   const [query, setQuery] = useState("");
@@ -23,6 +31,11 @@ export function SearchScreen() {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [target, setTarget] = useState<TakeOutTarget | null>(null);
+  /** Which way the quantity pad points, and whether it skips "Using this?". */
+  const [intent, setIntent] = useState<{
+    mode: "issue" | "return";
+    straightToQuantity: boolean;
+  }>({ mode: "issue", straightToQuantity: false });
 
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -90,6 +103,7 @@ export function SearchScreen() {
       return;
     }
 
+    setIntent({ mode: "issue", straightToQuantity: false });
     setTarget({
       componentId: hit.componentId,
       componentName: hit.name,
@@ -142,12 +156,60 @@ export function SearchScreen() {
 
       <div className="mt-6">
         {query.trim() === "" ? (
-          <Card>
-            <EmptyState
-              title="Start typing to find a part"
-              description="Search matches names, part numbers, manufacturers and the keywords an admin has added — so a nickname or a misspelling still lands."
-            />
-          </Card>
+          recent.length === 0 ? (
+            <Card>
+              <EmptyState
+                title="Start typing to find a part"
+                description="Search matches names, part numbers, manufacturers and the keywords an admin has added — so a nickname or a misspelling still lands."
+              />
+            </Card>
+          ) : (
+            <Card className="overflow-hidden">
+              <header className="flex items-center gap-2 border-b border-border px-4 py-3">
+                <MovementsIcon size={16} />
+                <h2 className="text-sm font-semibold">You took these lately</h2>
+              </header>
+              <ul className="divide-y divide-border">
+                {recent.map((row) => (
+                  <RecentRow
+                    key={`${row.componentId}:${row.locationId}`}
+                    row={row}
+                    onTake={() => {
+                      // An empty shelf has nothing to give; the detail page shows
+                      // where else the part lives.
+                      if (row.onHand <= 0) {
+                        router.push(`/parts/${row.componentId}`);
+                        return;
+                      }
+                      // The row already names the part and the cupboard, so
+                      // "Using this?" would only ask what the tap just answered.
+                      setIntent({ mode: "issue", straightToQuantity: true });
+                      setTarget({
+                        componentId: row.componentId,
+                        componentName: row.componentName,
+                        locationId: row.locationId,
+                        locationLabel: row.locationPath,
+                        onHand: row.onHand,
+                      });
+                    }}
+                    onReturn={() => {
+                      setIntent({ mode: "return", straightToQuantity: true });
+                      setTarget({
+                        componentId: row.componentId,
+                        componentName: row.componentName,
+                        locationId: row.locationId,
+                        locationLabel: row.locationPath,
+                        onHand: row.onHand,
+                      });
+                    }}
+                  />
+                ))}
+              </ul>
+              <p className="border-t border-border px-4 py-3 text-xs text-muted">
+                Or start typing to find anything else.
+              </p>
+            </Card>
+          )
         ) : loading && results.length === 0 ? (
           <Card>
             <p className="py-14 text-center text-sm text-muted">Searching…</p>
@@ -176,9 +238,75 @@ export function SearchScreen() {
       </div>
 
       {target ? (
-        <TakeOutModal target={target} onClose={() => setTarget(null)} />
+        <TakeOutModal
+          target={target}
+          mode={intent.mode}
+          startAtQuantity={intent.straightToQuantity}
+          onClose={() => setTarget(null)}
+        />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * One part this person took out lately.
+ *
+ * Two targets rather than one: taking more is the common case and gets the whole
+ * row, while putting some back is the other half of the same errand and gets its
+ * own button. Both are at least 44px, and the row still reads as one thing.
+ */
+function RecentRow({
+  row,
+  onTake,
+  onReturn,
+}: {
+  row: RecentTakeOut;
+  onTake: () => void;
+  onReturn: () => void;
+}) {
+  const empty = row.onHand <= 0;
+
+  return (
+    <li className="flex items-stretch">
+      <button
+        type="button"
+        onClick={onTake}
+        className="flex min-h-16 flex-1 items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-surface-muted/50 active:bg-surface-muted"
+      >
+        <div className="min-w-0 flex-1">
+          <p
+            className={`truncate text-base font-medium ${empty ? "text-muted" : ""}`}
+          >
+            {row.componentName}
+          </p>
+          <p className="truncate text-sm text-muted">
+            {row.locationPath}
+            <span className="mx-1.5 opacity-50">·</span>
+            you took {row.unitsTaken} {formatRelative(row.lastAt)}
+          </p>
+        </div>
+
+        <div className="w-12 shrink-0 text-right">
+          <span
+            className={`text-lg font-semibold tabular-nums ${
+              empty ? "text-muted" : "text-foreground"
+            }`}
+          >
+            {row.onHand}
+          </span>
+          <p className="text-xs text-muted">{empty ? "out" : "left"}</p>
+        </div>
+      </button>
+
+      <button
+        type="button"
+        onClick={onReturn}
+        className="min-h-16 shrink-0 border-l border-border px-4 text-sm font-medium text-muted transition-colors hover:bg-surface-hover hover:text-foreground"
+      >
+        Return
+      </button>
+    </li>
   );
 }
 

@@ -1,0 +1,2 @@
+ALTER TABLE "part_requests" ADD COLUMN "approved_qty" integer;--> statement-breakpoint
+ALTER TABLE "part_requests" ADD CONSTRAINT "part_requests_approved_qty_positive" CHECK ("part_requests"."approved_qty" IS NULL OR "part_requests"."approved_qty" > 0);

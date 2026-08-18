@@ -90,7 +90,11 @@ export default async function LogPage({
         description="Every movement, newest first. Nothing here is ever edited or deleted — undo appends a reversal."
       />
 
-      <LogFilterBar options={options} reasons={REASONS} />
+      <LogFilterBar
+        options={options}
+        reasons={REASONS}
+        currentUserId={user.id}
+      />
 
       <Card className="mt-4 overflow-hidden">
         {visible.length === 0 ? (

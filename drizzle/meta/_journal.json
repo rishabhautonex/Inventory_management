@@ -36,6 +36,20 @@
       "when": 1787043101008,
       "tag": "0004_project_details",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787048443166,
+      "tag": "0005_project_readme",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787049389199,
+      "tag": "0006_request_approved_qty",
+      "breakpoints": true
     }
   ]
 }

@@ -89,6 +89,8 @@ export function buildNav({
           ? [
               { href: "/admin/parts", label: "All parts" },
               { href: "/admin/parts/new", label: "Add part", exact: true },
+              { href: "/admin/parts/import", label: "Import a list", exact: true },
+              { href: "/admin/thresholds", label: "Minimums" },
             ]
           : []),
       ],
@@ -101,6 +103,9 @@ export function buildNav({
             icon: ReceiptIcon,
             items: [
               { href: "/orders", label: "Orders", exact: true },
+              ...(canManage
+                ? [{ href: "/admin/vendors", label: "Vendors", exact: true }]
+                : []),
               ...(canManage
                 ? [
                     {
