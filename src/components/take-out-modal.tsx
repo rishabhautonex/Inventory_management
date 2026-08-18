@@ -121,7 +121,7 @@ export function TakeOutModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="take-out-title"
-        className="safe-bottom w-full max-w-md rounded-t-2xl border border-border bg-surface p-5 shadow-(--shadow-panel) sm:rounded-2xl"
+        className="safe-bottom w-full max-w-md rounded-t-2xl panel-glass p-5 sm:rounded-2xl"
       >
         <h2 id="take-out-title" className="text-lg font-semibold">
           {step === "confirm" ? "Using this?" : "How many?"}

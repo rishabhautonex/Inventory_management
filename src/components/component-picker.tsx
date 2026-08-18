@@ -144,7 +144,7 @@ export function ComponentPicker({
       />
 
       {open && query.trim() !== "" ? (
-        <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-border bg-surface shadow-(--shadow-panel)">
+        <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg panel-glass">
           {loading && results.length === 0 ? (
             <p className="px-3 py-3 text-sm text-muted">Searching…</p>
           ) : results.length === 0 ? (

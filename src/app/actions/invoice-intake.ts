@@ -12,7 +12,11 @@ import {
   getSessionUser,
   type SessionUser,
 } from "@/lib/auth";
-import { extractInvoice, type Confidence } from "@/lib/invoice-extract";
+import { type Confidence } from "@/lib/invoice-extract";
+import {
+  structureInvoice,
+  type ReadingSource,
+} from "@/lib/invoice-structure";
 import { matchDescription, type MatchCandidate } from "@/lib/invoice-match";
 import { LedgerError, recordMovement } from "@/lib/ledger";
 import { extractInvoiceText } from "@/lib/ocr";
@@ -77,6 +81,10 @@ export type IntakeLine = {
   amount: number | null;
   confidence: Confidence;
   reason: string;
+  /** Which of the two readings proposed this line. */
+  source: ReadingSource;
+  /** What the other reading said, when the two disagreed on the quantity. */
+  disagreement: string | null;
   /** Ranked catalogue matches; the first is pre-selected in the review. */
   matches: MatchCandidate[];
 };
@@ -92,6 +100,12 @@ export type IntakeDraft = {
   totalAmount: number | null;
   trackingNumber: string | null;
   trackingUrl: string | null;
+  /** Whether the second reading ran, so the review screen can say so. */
+  usedModel: boolean;
+  /** Why it did not run, when it did not. */
+  modelNote: string | null;
+  /** Header fields the two readings did not agree on. */
+  disagreements: string[];
   lines: IntakeLine[];
 };
 
@@ -133,7 +147,7 @@ export async function analyseInvoiceAction(
     }
 
     const vendors = await listVendors(db);
-    const extracted = extractInvoice(
+    const extracted = await structureInvoice(
       outcome.text,
       vendors.map((v) => v.name),
     );
@@ -147,6 +161,8 @@ export async function analyseInvoiceAction(
         amount: line.amount,
         confidence: line.confidence,
         reason: line.reason,
+        source: line.source,
+        disagreement: line.disagreement,
         matches: await matchDescription(db, line.description, 4),
       })),
     );
@@ -164,6 +180,9 @@ export async function analyseInvoiceAction(
         totalAmount: extracted.totalAmount,
         trackingNumber: extracted.trackingNumber,
         trackingUrl: extracted.trackingUrl,
+        usedModel: extracted.usedModel,
+        modelNote: extracted.modelNote,
+        disagreements: extracted.disagreements,
         lines,
       },
     };

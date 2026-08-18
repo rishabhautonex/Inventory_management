@@ -70,7 +70,7 @@ export function ProjectManager({
   return (
     <div className="space-y-4">
       {adding ? (
-        <div className="space-y-5 rounded-xl border border-border bg-surface p-4 sm:p-6">
+        <div className="space-y-5 panel rounded-xl p-4 sm:p-6">
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <Field label="Name" required>
               <input

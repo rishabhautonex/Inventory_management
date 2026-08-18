@@ -22,8 +22,9 @@ import {
   type Tone,
 } from "@/components/ui";
 import type { Confidence } from "@/lib/invoice-extract";
+import type { ReadingSource } from "@/lib/invoice-structure";
 import type { MatchCandidate } from "@/lib/invoice-match";
-import { ComponentPicker } from "../new/component-picker";
+import { ComponentPicker } from "@/components/component-picker";
 
 type Choice = { componentId: string; name: string; mpn: string | null };
 
@@ -33,6 +34,8 @@ type ReviewLine = {
   description: string;
   confidence: Confidence;
   reason: string;
+  source: ReadingSource;
+  disagreement: string | null;
   matches: MatchCandidate[];
   include: boolean;
   /** "matched" picks from what the invoice matched; "search" opens the picker. */
@@ -54,6 +57,17 @@ const CONFIDENCE_LABEL: Record<Confidence, string> = {
   high: "Numbers check out",
   medium: "Check this",
   low: "Needs a quantity",
+};
+
+/**
+ * Shown only when the two readings did not both find the line.
+ *
+ * Agreement needs no chip — that is what "Numbers check out" already means. A
+ * line one reader found alone is the one worth a second look against the paper.
+ */
+const SOURCE_LABEL: Partial<Record<ReadingSource, string>> = {
+  parser: "One reading only",
+  model: "Second reading only",
 };
 
 export function InvoiceIntake({
@@ -137,6 +151,8 @@ export function InvoiceIntake({
           description: line.description,
           confidence: line.confidence,
           reason: line.reason,
+          source: line.source,
+          disagreement: line.disagreement,
           matches: line.matches,
           // A line with no catalogue match starts unticked: there is nothing to
           // record against, and silently dropping it would be worse than
@@ -244,7 +260,7 @@ export function InvoiceIntake({
 
   return (
     <>
-      <section className="rounded-xl border border-border bg-surface p-4 sm:p-6">
+      <section className="panel rounded-xl p-4 sm:p-6">
         <h2 className="text-base font-semibold">Upload the invoice</h2>
         <p className="mt-1 text-sm text-muted">
           A PDF or a photo of the bill. Everything found on it is shown for you to
@@ -294,7 +310,7 @@ export function InvoiceIntake({
             role="dialog"
             aria-modal="true"
             aria-labelledby="intake-title"
-            className="mx-auto my-4 w-[calc(100%-1rem)] max-w-5xl rounded-2xl border border-border bg-surface shadow-(--shadow-panel) sm:my-8 sm:w-[calc(100%-3rem)]"
+            className="mx-auto my-4 w-[calc(100%-1rem)] max-w-5xl rounded-2xl panel-glass sm:my-8 sm:w-[calc(100%-3rem)]"
           >
             <header className="sticky top-0 z-10 flex items-start justify-between gap-3 rounded-t-2xl border-b border-border bg-surface px-4 py-4 sm:px-6">
               <div>
@@ -321,6 +337,21 @@ export function InvoiceIntake({
               {draft.ocrNote ? (
                 <p className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
                   {draft.ocrNote}
+                </p>
+              ) : null}
+
+              {draft.modelNote ? (
+                <p className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
+                  {draft.modelNote}
+                </p>
+              ) : null}
+
+              {draft.disagreements.length > 0 ? (
+                <p className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
+                  The two readings of this invoice disagreed on the{" "}
+                  {draft.disagreements.join(", the ")}. Check{" "}
+                  {draft.disagreements.length > 1 ? "those fields" : "that field"}{" "}
+                  against the invoice before saving.
                 </p>
               ) : null}
 
@@ -485,6 +516,11 @@ export function InvoiceIntake({
                               <Badge tone={CONFIDENCE_TONE[line.confidence]}>
                                 {CONFIDENCE_LABEL[line.confidence]}
                               </Badge>
+                              {SOURCE_LABEL[line.source] ? (
+                                <Badge tone="neutral">
+                                  {SOURCE_LABEL[line.source]}
+                                </Badge>
+                              ) : null}
                             </div>
 
                             {line.confidence !== "high" ? (

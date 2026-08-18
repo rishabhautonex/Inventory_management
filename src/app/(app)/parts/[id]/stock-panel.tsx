@@ -57,7 +57,7 @@ export function StockPanel({
   const [correcting, setCorrecting] = useState<StockRow | null>(null);
 
   return (
-    <section className="rounded-xl border border-border bg-surface">
+    <section className="panel rounded-xl">
       <header className="flex items-center justify-between gap-3 px-4 py-4 sm:px-5">
         <h2 className="text-base font-semibold">Where it is</h2>
         <button
@@ -163,7 +163,7 @@ function Sheet({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="safe-bottom w-full max-w-md rounded-t-2xl border border-border bg-surface p-5 shadow-(--shadow-panel) sm:rounded-2xl"
+        className="safe-bottom w-full max-w-md rounded-t-2xl panel-glass p-5 sm:rounded-2xl"
       >
         <h2 className="text-lg font-semibold">{title}</h2>
         {children}

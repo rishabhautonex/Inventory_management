@@ -74,7 +74,7 @@ export function AccountMenu({
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 top-13 z-40 w-64 overflow-hidden rounded-xl border border-border bg-surface shadow-(--shadow-panel)"
+          className="absolute right-0 top-13 z-40 w-64 overflow-hidden rounded-xl panel-glass"
         >
           <div className="border-b border-border px-4 py-3">
             <p className="truncate text-sm font-medium">{name}</p>

@@ -81,7 +81,7 @@ export function NotificationBell({
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 top-13 z-40 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border bg-surface shadow-(--shadow-panel)"
+          className="absolute right-0 top-13 z-40 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-xl panel-glass"
         >
           <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
             <p className="text-sm font-semibold">Notifications</p>

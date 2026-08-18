@@ -32,9 +32,36 @@ function connect() {
     postgres(connectionString, {
       // Supabase's transaction pooler does not support prepared statements.
       prepare: false,
-      // Per instance, not per deployment. A serverless host runs many of these
-      // against one pooler, so a generous cap here is how you exhaust it.
-      max: 3,
+
+      /**
+       * Per instance, not per deployment. A serverless host runs many of these
+       * against one pooler, so a generous cap here is how you exhaust it — but
+       * too tight a cap is worse. Every page calls `requireUser()`, so with a
+       * pool of three, three slow or stuck queries make the whole application
+       * stop responding rather than just one screen.
+       */
+      max: Number(process.env.DATABASE_POOL_MAX ?? 8),
+
+      /**
+       * The fix for the app freezing after a period of inactivity.
+       *
+       * The pooler drops idle client connections, and a laptop that slept or a
+       * NAT that timed out does the same. postgres-js cannot tell a dropped
+       * socket from a quiet one, so it sends the next query into a socket that
+       * nothing is listening to and waits — the query never arrives, so no
+       * server-side timeout can rescue it, and the connection is held until TCP
+       * eventually gives up. Three of those and the pool is gone.
+       *
+       * Closing our own idle connections first means a stale socket is never
+       * reused. This matters far more than it looks.
+       */
+      idle_timeout: 20,
+
+      /** Recycles long-lived connections, so one cannot rot in place. */
+      max_lifetime: 60 * 30,
+
+      /** An unreachable database should fail in seconds, not hang the request. */
+      connect_timeout: 15,
     });
 
   const instance = drizzle(client, { schema, casing: "snake_case" });

@@ -43,7 +43,7 @@ writes to the ledger directly, so this is checked rather than merely documented.
 ```
 src/db/schema.ts        tables, enums, check constraints
 src/db/queries/         raw-SQL read models (search, movements, dashboard,
-                        notifications)
+                        notifications, orders, requests, bom, projects)
 src/db/rows.ts          runQuery(): typed rows, driver-neutral
 src/lib/ledger.ts       the only ledger write path
 src/lib/auth.ts         session, roles, permission predicates
@@ -53,6 +53,9 @@ src/lib/ocr.ts          invoice text extraction, behind InvoiceTextExtractor
 src/lib/invoice-extract.ts  reads fields and line items off invoice text
 src/lib/invoice-match.ts  suggests catalogue matches; never writes
 src/lib/orders.ts       shared order+lines insert, used by both intake paths
+src/lib/request-alerts.ts   request-workflow notifications
+src/lib/bom-parse.ts    CSV / pasted-table reader; never guesses a quantity
+src/lib/bom-match.ts    normalised MPN first, then fuzzy name; never writes
 src/lib/storage.ts      private invoice bucket, staging, signed reads
 src/app/(app)/          authenticated screens
 src/app/actions/        server actions
@@ -66,20 +69,73 @@ tests/                  run against real Postgres via PGlite
 
 ## The look
 
-Dark by default with a `#2661C8` brand blue. Both schemes are complete token
-sets in [globals.css](src/app/globals.css); light is an override under
-`:root[data-theme="light"]`, and the toggle in the top bar writes that attribute
-plus localStorage. The inline script in the root layout re-applies it before
-first paint, so a light-mode user never sees a dark flash.
+An instrument panel, not a document: near-black `#0B0F14` ground, `#121922`
+surfaces, and a signal palette that only ever carries meaning — cyan `#35D6FF`
+for the brand and anything selected, emerald `#31E6A8` for in and healthy,
+amber `#FFB547` for out and low, red `#FF5D73` for empty and overdue. Text is
+`#F5F7FA` over `#94A3B8`.
 
-Two rules that are easy to break:
+Both schemes are complete token sets in [globals.css](src/app/globals.css);
+light is an override under `:root[data-theme="light"]`, and the toggle in the
+top bar writes that attribute plus localStorage. The inline script in the root
+layout re-applies it before first paint, so a light-mode user never sees a dark
+flash — which is why `THEME_STORAGE_KEY` lives in [lib/theme.ts](src/lib/theme.ts)
+and not beside the toggle. A Server Component importing a value out of a
+`"use client"` module gets a client reference proxy rather than the string, and
+that script spent a while reading `localStorage.getItem(undefined)`.
 
-- **`accent` fills, `accent-text` writes.** `#2661C8` is too dark to read
-  against a near-black page, so links, badge text and active labels use
-  `text-accent-text` (a lightened blue in dark, a deepened one in light) while
-  buttons and the active nav pill use `bg-accent`.
+Rules that are easy to break:
+
+- **`accent` fills, `accent-text` writes.** Cyan is bright, so a filled control
+  carries dark ink (`--accent-foreground`) and lightens on hover, while links,
+  badge text and active labels use `text-accent-text`. In light mode both are
+  the same hue taken down far enough to sit on white.
+- **A solid accent fill means "this is the action".** Primary buttons and the
+  logo tile, and nothing else. Selected nav entries and filter tabs use
+  `bg-accent-soft` with a lit edge — eight solid cyan pills down a rail shout
+  louder than the screen they introduce.
 - **Never define a colour only inside `[data-theme="light"]`.** Bare `:root` is
   the base; anything missing there is invisible in dark mode.
+
+Four surface treatments carry the depth, all in globals.css so a card cannot
+half-adopt one:
+
+| class | for |
+| --- | --- |
+| `.panel` | every card: surface colour, top-lit gradient, hairline border, 1px inner highlight |
+| `.panel-glass` | floating things — menus, modals, the login card |
+| `.chrome-glass` | the top bar and the phone's bottom nav; no border of its own |
+| `.grid-backdrop` / `.aurora` | the drawing grid behind the shell and the bloom behind a page header |
+
+Charts are hand-rolled SVG in [components/ui.tsx](src/components/ui.tsx) —
+`Sparkline`, `SplineChart`, `RadialGauge`, `Heatmap` — with no chart library and
+no client component, so they render on the server and cost the browser nothing.
+The curves are Catmull-Rom converted to beziers, which smooths the line *between*
+readings and still passes through every measured point.
+
+## The dashboard
+
+Every figure and every chart on it is a read model over `stock_movements`, in
+[queries/dashboard.ts](src/db/queries/dashboard.ts), and the rule that keeps it
+honest is that **nothing is drawn that was not measured**:
+
+- `getMovementSeries()` generates the day list rather than reading it off the
+  ledger, so a quiet day is a zero and not a gap the spline would draw straight
+  through. Days are bucketed in Asia/Kolkata, like `movements_today`.
+- The on-hand sparkline is reconstructed on the page by walking today's total
+  backwards through those daily nets. It is the same rows the total came from,
+  not a second stored series that could drift.
+- `listTopMovers()` drops both halves of a correction — the reversed movement
+  and its reversal — so a mistake does not leave a part looking busy.
+- `getStockHealth()` counts only pairs that have a minimum set. Without one
+  there is no standard to be above, and counting them as healthy flatters the
+  gauge. A threshold whose shelf has never seen a movement is empty, not
+  missing.
+- A trend badge, a sparkline and a signal line are each omitted when there is
+  nothing honest behind them: no yesterday to compare against, no series, no
+  statement that holds. `tests/dashboard.test.ts` pins these shapes.
+
+Signals are derived, never predicted — each line restates rows already fetched.
 
 Two navigations, one per breakpoint: `Sidebar` from `lg` up, `BottomNav` below.
 The phone keeps the thumb-reachable bar because the take-out flow is someone
@@ -123,7 +179,8 @@ digest instead), and the spec's seven-day dedupe window is enforced inside the
 INSERT via `notifications.dedupe_key`. Not yet built from that step: the manager
 digest, and the daily job for overdue deliveries — that one needs orders first.
 
-Steps 6 and 10 are done: orders, receiving, invoice upload and invoice OCR.
+Steps 6, 7, 9 and 10 are done: orders, receiving, invoice upload and invoice
+OCR; part requests and approvals; BOM import and shortfall.
 
 The one rule that matters here is that **an order is an intention, not stock**.
 Nothing an order does touches the ledger until a line is put away, and that
@@ -192,8 +249,81 @@ Invoices go to a **private** Supabase Storage bucket (`INVOICE_BUCKET`) and are
 read back through short-lived signed URLs. Storage keys are derived from the
 order id, never from the uploaded filename.
 
-Still to come: part requests, BOM import, the manager digest, and the daily
-overdue-delivery job.
+Still to come: the manager digest, and the daily overdue-delivery job.
+
+## Part requests
+
+```
+engineer raises → project head approves → admin converts to an order
+```
+
+The screens are at `/requests`, the writes in
+[actions/requests.ts](src/app/actions/requests.ts). Three things hold it
+together:
+
+- **A request is a want, not stock, and not yet a purchase.** Approving creates
+  nothing; converting calls `insertOrderWithLines()`, so what comes out is an
+  ordinary order that receives like any other and only becomes stock when a line
+  is put away.
+- **Every transition is guarded on the state it is leaving, inside the UPDATE.**
+  Two heads tapping Approve at the same moment produce one approval and one
+  "already decided", rather than racing over `decided_by`. Same for converting,
+  which is guarded on `approved` so a double click cannot attach a second order
+  and orphan the first.
+- **Visibility is a value, not a branch.** `visibilityFor(user)` in
+  [queries/requests.ts](src/db/queries/requests.ts) is the only place the role
+  rule lives, and it is applied inside the lookup — so a request for a project
+  somebody does not lead is a 404, not a refusal that confirms it exists.
+
+A rejection needs a note: the spec asks for it, the `part_requests_rejection_needs_note`
+check enforces it, and the form asks for it before offering the button. A
+free-text request cannot be converted, because an order line needs a real
+catalogue part; the UI sends the admin to catalogue it first rather than
+inventing a component with no search keywords.
+
+Requests raised for a project with no head assigned fall through to the admins.
+Without that they would sit unseen for ever.
+
+## BOM import
+
+`/projects/[id]/bom`, and it is the invoice intake's shape again:
+`analyseBomAction` reads and proposes and **writes nothing**;
+`commitBomAction` takes only what the reviewer confirmed on screen and never
+re-reads the uploaded text.
+
+- **A quantity that could not be read is `null`, not a guess** — the same rule
+  as the invoice flow. The review row leaves the field blank and carries a note.
+- **Nothing here creates a component.** Unmatched rows link out to
+  `/admin/parts/new`, per the spec, because a part conjured mid-import arrives
+  with no search keywords and an unfindable part is what the catalogue exists to
+  prevent.
+- **Matching is exact-then-fuzzy**, in that order:
+  [bom-match.ts](src/lib/bom-match.ts) resolves normalised MPN through
+  `squash_search` — the same normalisation as the unique index on
+  `components.mpn` — before falling back to the ordinary fuzzy search. Only MPN
+  hits and literal name containment are pre-selected; a merely similar name is
+  offered and left unticked.
+- **The delimiter is detected by consistency, not frequency.** A description
+  column full of commas otherwise beats the tabs that actually separate the
+  columns, so the candidate with the steadiest cell count per line wins. Quoted
+  fields are honoured, because `Resistor, 10k 1%` is an ordinary part name.
+
+Shortfall lives in [queries/bom.ts](src/db/queries/bom.ts) and is derived, like
+every quantity here: `needed - SUM(on_hand)` over **that project's own**
+locations, resolved through `location_tree` so a bin inherits its cupboard's
+project. Another cupboard's stock is never an answer — lab policy is that two
+projects needing the same part buy it twice.
+
+`on_order` and `requested` sit beside `to_buy` without being subtracted from
+it. A box that has not arrived is not stock, so netting it off would show zero
+short for a part nobody has; what they do is stop somebody buying the same thing
+twice on the screen that makes that easy. Both one-click paths — raise requests,
+order the gaps — re-derive quantities server-side from the ledger, so a tab left
+open while a delivery was put away does nothing rather than ordering air.
+
+A new upload does not replace the old one. Only the newest is what the project
+page measures against; the rest stay readable, and a switcher puts the choice in
+the URL.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

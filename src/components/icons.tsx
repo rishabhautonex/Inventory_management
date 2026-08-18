@@ -307,3 +307,15 @@ export function SignOutIcon({ className, size = 20 }: IconProps) {
     </svg>
   );
 }
+
+/** A raised hand: somebody asking for a part. */
+export function RequestIcon({ className, size = 20 }: IconProps) {
+  return (
+    <svg {...base(size)} className={className}>
+      <path d="M10 11V4.5a1.5 1.5 0 0 1 3 0V11" />
+      <path d="M13 10.5V3.5a1.5 1.5 0 0 1 3 0V12" />
+      <path d="M16 11.5v-2a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.5a5.5 5.5 0 0 1-4.6-2.5L4 13.4a1.6 1.6 0 0 1 2.6-1.9L8.5 14" />
+      <path d="M10 11V8.5a1.5 1.5 0 0 0-3 0V14" />
+    </svg>
+  );
+}

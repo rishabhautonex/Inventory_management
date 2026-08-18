@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "bom_lines_bom_component_key" ON "bom_lines" USING btree ("bom_id","component_id");

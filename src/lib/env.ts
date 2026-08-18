@@ -29,6 +29,19 @@ export const env = {
   get SUPABASE_SERVICE_ROLE_KEY() {
     return required("SUPABASE_SERVICE_ROLE_KEY");
   },
+  /**
+   * Server-only, and deliberately optional.
+   *
+   * When it is absent the app reads invoices exactly as it always has, with the
+   * deterministic parser alone. A missing key is a smaller feature, never a
+   * broken upload, so this returns null rather than throwing like the others.
+   */
+  get DEEPSEEK_API_KEY(): string | null {
+    return process.env.DEEPSEEK_API_KEY?.trim() || null;
+  },
+  get DEEPSEEK_MODEL(): string {
+    return process.env.DEEPSEEK_MODEL?.trim() || "deepseek-v4-pro";
+  },
   get INVOICE_BUCKET(): string {
     return process.env.INVOICE_BUCKET?.trim() || "invoices";
   },

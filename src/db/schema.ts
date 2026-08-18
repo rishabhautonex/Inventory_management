@@ -436,6 +436,10 @@ export const bomLines = pgTable(
   (t) => [
     index("bom_lines_bom_idx").on(t.bomId),
     check("bom_lines_qty_positive", sql`${t.qtyNeeded} > 0`),
+    // One row per part per BOM. Two rows for the same component would make
+    // "how many are needed" ambiguous and force the shortfall table to pick
+    // one; the import merges duplicate rows before they get here instead.
+    uniqueIndex("bom_lines_bom_component_key").on(t.bomId, t.componentId),
   ],
 );
 

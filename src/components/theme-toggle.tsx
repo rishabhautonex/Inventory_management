@@ -1,8 +1,7 @@
 "use client";
 
+import { THEME_STORAGE_KEY } from "@/lib/theme";
 import { MoonIcon, SunIcon } from "@/components/icons";
-
-export const THEME_STORAGE_KEY = "labstock-theme";
 
 /**
  * Dark / light switch.

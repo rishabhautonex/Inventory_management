@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   DashboardIcon,
   MovementsIcon,
+  RequestIcon,
   SearchIcon,
   SettingsIcon,
   type IconProps,
@@ -18,6 +19,12 @@ import {
  *
  * Capped at four entries so nothing is squeezed below a thumb's width on a
  * narrow phone. People lives under Admin rather than taking a fifth slot.
+ *
+ * The fourth slot goes to whichever screen that role actually opens on a phone.
+ * For an engineer or a head that is Requests — asking for a part happens
+ * standing at the empty cupboard. An admin gets Admin instead and reaches
+ * Requests from the sidebar or a notification, because converting one into an
+ * order is desk work either way.
  */
 export function BottomNav({
   canManage,
@@ -50,20 +57,23 @@ export function BottomNav({
       icon: DashboardIcon,
       match: (p) => p.startsWith("/dashboard"),
     },
-    ...(canManage
-      ? [
-          {
-            href: "/admin",
-            label: "Admin",
-            icon: SettingsIcon,
-            match: (p: string) => p.startsWith("/admin"),
-          },
-        ]
-      : []),
+    canManage
+      ? {
+          href: "/admin",
+          label: "Admin",
+          icon: SettingsIcon,
+          match: (p: string) => p.startsWith("/admin"),
+        }
+      : {
+          href: "/requests",
+          label: "Requests",
+          icon: RequestIcon,
+          match: (p: string) => p.startsWith("/requests"),
+        },
   ];
 
   return (
-    <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-border bg-sidebar/95 backdrop-blur lg:hidden">
+    <nav className="chrome-glass safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-border lg:hidden">
       <ul className="mx-auto flex max-w-md">
         {items.map((item) => {
           const active = item.match(pathname);
@@ -74,17 +84,26 @@ export function BottomNav({
               <Link
                 href={item.href}
                 aria-current={active ? "page" : undefined}
-                className={`relative flex min-h-16 flex-col items-center justify-center gap-1 text-xs font-medium transition-colors ${
+                className={`relative flex min-h-16 flex-col items-center justify-center gap-1 text-[11px] font-semibold transition-colors ${
                   active ? "text-accent-text" : "text-muted"
                 }`}
               >
+                {/* The lit bar rides the top edge rather than underlining the
+                    label: at a cupboard the thumb covers the bottom of the
+                    button, and an indicator under it would be hidden. */}
                 {active ? (
                   <span
                     aria-hidden
-                    className="absolute inset-x-4 top-0 h-0.5 rounded-full bg-accent-text"
+                    className="absolute inset-x-5 top-0 h-0.5 rounded-full bg-accent shadow-[0_0_10px_var(--accent)]"
                   />
                 ) : null}
-                <Icon size={22} />
+                <span
+                  className={`flex h-8 w-12 items-center justify-center rounded-lg transition-colors ${
+                    active ? "bg-accent-soft" : ""
+                  }`}
+                >
+                  <Icon size={21} />
+                </span>
                 {item.label}
               </Link>
             </li>

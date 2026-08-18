@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
-import { THEME_STORAGE_KEY } from "@/components/theme-toggle";
+import { THEME_STORAGE_KEY } from "@/lib/theme";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -17,8 +17,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   // Zoom stays available; the app just does not start zoomed.
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#0a0a0c" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a0c" },
+    { media: "(prefers-color-scheme: light)", color: "#0b0f14" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b0f14" },
   ],
 };
 

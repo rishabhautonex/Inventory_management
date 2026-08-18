@@ -1,0 +1,10 @@
+import { db } from "./src/db";
+import { runQuery } from "./src/db/rows";
+import { sql } from "drizzle-orm";
+const t0 = Date.now();
+const rows = await runQuery<{ n: number }>(db, sql`SELECT count(*)::int AS n FROM users`);
+console.log(`app client: count(users)=${rows[0].n} in ${Date.now() - t0}ms`);
+const t1 = Date.now();
+await Promise.all(Array.from({ length: 12 }, () => runQuery(db, sql`SELECT pg_sleep(0.3)`)));
+console.log(`12 concurrent 300ms queries in ${Date.now() - t1}ms (old cap of 3 would be ~1200ms+)`);
+process.exit(0);

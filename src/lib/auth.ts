@@ -155,6 +155,21 @@ export function canViewProject(user: SessionUser, projectId: string): boolean {
 }
 
 /**
+ * Upload or replace a project's BOM.
+ *
+ * Wider than `canManageInventory` on purpose: the spec puts this in the hands
+ * of "a project head or admin", and a head owns the parts list for the project
+ * they run even though they may not touch the catalogue or the ledger.
+ */
+export function canManageProjectBom(
+  user: SessionUser,
+  projectId: string,
+): boolean {
+  if (user.role === "manager" || user.role === "admin") return true;
+  return user.role === "project_head" && user.leadProjectIds.includes(projectId);
+}
+
+/**
  * Undo a movement.
  *
  * Anyone may undo their own mistake — that is what makes the toast's Undo

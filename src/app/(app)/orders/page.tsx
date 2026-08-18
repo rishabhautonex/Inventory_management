@@ -196,7 +196,7 @@ function StatusTab({
       aria-current={active ? "page" : undefined}
       className={`inline-flex min-h-11 items-center rounded-lg px-3.5 text-sm font-medium transition-colors ${
         active
-          ? "bg-accent text-accent-foreground"
+          ? "border border-accent/40 bg-accent-soft text-accent-text"
           : "border border-border text-muted hover:bg-surface-hover hover:text-foreground"
       }`}
     >

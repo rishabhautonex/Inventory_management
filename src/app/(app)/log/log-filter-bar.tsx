@@ -44,7 +44,7 @@ export function LogFilterBar({
   const activeCount = KEYS.filter((key) => searchParams.get(key)).length;
 
   return (
-    <div className="rounded-xl border border-border bg-surface">
+    <div className="panel rounded-xl">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

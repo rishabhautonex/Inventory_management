@@ -5,9 +5,12 @@ import { usePathname } from "next/navigation";
 
 import {
   BellIcon,
+  CubeIcon,
   DashboardIcon,
+  LayersIcon,
   PackageIcon,
   ReceiptIcon,
+  RequestIcon,
   SettingsIcon,
   type IconProps,
 } from "@/components/icons";
@@ -33,9 +36,12 @@ type Entry =
 export function buildNav({
   canManage,
   canManageUsers,
+  canSeeProjects,
 }: {
   canManage: boolean;
   canManageUsers: boolean;
+  /** Admins and managers, plus anybody who heads at least one project. */
+  canSeeProjects: boolean;
 }): Entry[] {
   return [
     {
@@ -48,6 +54,22 @@ export function buildNav({
       icon: BellIcon,
       leaf: { href: "/notifications", label: "Notifications" },
     },
+    // Above Inventory rather than inside Purchasing: raising one is the
+    // engineer's move when a cupboard is empty, not an admin's buying step.
+    {
+      kind: "link",
+      icon: RequestIcon,
+      leaf: { href: "/requests", label: "Requests" },
+    },
+    ...(canSeeProjects
+      ? [
+          {
+            kind: "link" as const,
+            icon: LayersIcon,
+            leaf: { href: "/projects", label: "Projects" },
+          },
+        ]
+      : []),
     {
       kind: "group",
       label: "Inventory",
@@ -138,26 +160,39 @@ export function activeHref(pathname: string, nav: Entry[]): string | null {
 export function Sidebar({
   canManage,
   canManageUsers,
+  canSeeProjects,
 }: {
   canManage: boolean;
   canManageUsers: boolean;
+  canSeeProjects: boolean;
 }) {
   const pathname = usePathname();
-  const nav = buildNav({ canManage, canManageUsers });
+  const nav = buildNav({ canManage, canManageUsers, canSeeProjects });
   const active = activeHref(pathname, nav);
 
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-border bg-sidebar lg:flex">
-      <div className="flex h-16 shrink-0 items-center px-6">
-        <Link
-          href="/dashboard"
-          className="brand-mark text-xl font-bold tracking-tight"
+      <div className="flex h-16 shrink-0 items-center gap-2.5 px-5">
+        <span
+          aria-hidden
+          className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-accent-foreground shadow-[0_6px_16px_-8px_var(--accent)]"
         >
-          LabStock
-        </Link>
+          <CubeIcon size={18} />
+        </span>
+        <span className="min-w-0">
+          <Link
+            href="/dashboard"
+            className="brand-mark block text-lg font-bold leading-none tracking-tight"
+          >
+            LabStock
+          </Link>
+          <span className="eyebrow mt-1 block text-[0.5625rem] text-muted">
+            R&amp;D inventory
+          </span>
+        </span>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 pb-6">
+      <nav className="flex-1 overflow-y-auto px-3 pb-4">
         <ul className="space-y-1">
           {nav.map((entry) =>
             entry.kind === "link" ? (
@@ -169,12 +204,14 @@ export function Sidebar({
                 />
               </li>
             ) : (
-              <li key={entry.label} className="pt-4 first:pt-0">
-                <p className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-muted">
-                  <entry.icon size={18} />
+              <li key={entry.label} className="pt-5 first:pt-0">
+                {/* A section heading, not a link — the group has no page of its
+                    own, and styling it like one invites a dead click. */}
+                <p className="eyebrow flex items-center gap-2 px-3 py-1.5 text-muted">
+                  <entry.icon size={14} />
                   {entry.label}
                 </p>
-                <ul className="mt-0.5 space-y-0.5">
+                <ul className="mt-1 space-y-0.5">
                   {entry.items.map((leaf) => (
                     <li key={leaf.href}>
                       <NavLink leaf={leaf} active={active === leaf.href} inset />
@@ -186,6 +223,19 @@ export function Sidebar({
           )}
         </ul>
       </nav>
+
+      <div className="shrink-0 border-t border-border px-5 py-3.5">
+        <p className="flex items-center gap-2 text-[11px] font-medium text-muted">
+          <span className="relative flex h-1.5 w-1.5 text-positive">
+            <span
+              aria-hidden
+              className="pulse-ring absolute inset-0 rounded-full bg-current"
+            />
+            <span className="relative h-1.5 w-1.5 rounded-full bg-current" />
+          </span>
+          Append-only ledger
+        </p>
+      </div>
     </aside>
   );
 }
@@ -205,14 +255,23 @@ function NavLink({
     <Link
       href={leaf.href}
       aria-current={active ? "page" : undefined}
-      className={`flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors ${
-        inset ? "pl-11" : ""
+      /* Active is a tinted pill with a lit left edge rather than a solid
+         accent block: the accent is a bright signal colour, and eight of them
+         down a rail would shout louder than the screen it introduces. */
+      className={`relative flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors ${
+        inset ? "pl-10" : ""
       } ${
         active
-          ? "bg-accent text-accent-foreground"
+          ? "bg-accent-soft text-accent-text"
           : "text-muted hover:bg-surface-hover hover:text-foreground"
       }`}
     >
+      {active ? (
+        <span
+          aria-hidden
+          className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-accent shadow-[0_0_8px_var(--accent)]"
+        />
+      ) : null}
       {Icon ? <Icon size={18} /> : null}
       {leaf.label}
     </Link>

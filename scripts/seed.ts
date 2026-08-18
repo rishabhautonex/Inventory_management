@@ -213,6 +213,88 @@ async function main() {
     }
   }
 
+  async function componentIdByMpn(mpn: string) {
+    const [row] = await db
+      .select({ id: schema.components.id })
+      .from(schema.components)
+      .where(eq(schema.components.mpn, mpn));
+    return row?.id ?? null;
+  }
+
+  // A BOM for Falcon, chosen so the shortfall table has both kinds of row:
+  // parts already covered by the cupboard, and parts that are only on the
+  // general shelf — which belongs to no project and therefore counts for none.
+  const [existingBom] = await db
+    .select()
+    .from(schema.boms)
+    .where(eq(schema.boms.projectId, projectIds.FAL));
+
+  if (!existingBom) {
+    const wanted = [
+      { mpn: "ESP32-DEVKITC-32D", qtyNeeded: 10 },
+      { mpn: "STM32F103C8T6", qtyNeeded: 4 },
+      { mpn: "AM2302", qtyNeeded: 12 },
+      { mpn: "HDR-M-254-40", qtyNeeded: 6 },
+    ];
+
+    const lines: Array<{ componentId: string; qtyNeeded: number }> = [];
+    for (const entry of wanted) {
+      const componentId = await componentIdByMpn(entry.mpn);
+      if (componentId) lines.push({ componentId, qtyNeeded: entry.qtyNeeded });
+    }
+
+    if (lines.length > 0) {
+      const [bom] = await db
+        .insert(schema.boms)
+        .values({
+          projectId: projectIds.FAL,
+          name: "Falcon gateway",
+          version: "rev A",
+          uploadedBy: actor.id,
+        })
+        .returning();
+
+      await db
+        .insert(schema.bomLines)
+        .values(lines.map((line) => ({ bomId: bom.id, ...line })));
+
+      console.log(`  BOM Falcon gateway (${lines.length} lines)`);
+    }
+  }
+
+  // Two requests, one at each end of the workflow, so the queues are not empty.
+  const [existingRequest] = await db
+    .select()
+    .from(schema.partRequests)
+    .limit(1);
+
+  if (!existingRequest) {
+    const servo = await componentIdByMpn("MG996R");
+
+    if (servo) {
+      await db.insert(schema.partRequests).values({
+        requestedBy: actor.id,
+        projectId: projectIds.KES,
+        componentId: servo,
+        qty: 2,
+        reason: "The Kestrel arm needs two more — the shelf is empty.",
+      });
+    }
+
+    await db.insert(schema.partRequests).values({
+      requestedBy: actor.id,
+      projectId: projectIds.FAL,
+      freeText: "Waveshare 7.5in e-paper display, 800×480",
+      qty: 1,
+      reason: "For the gateway status panel. Not catalogued yet.",
+      status: "approved",
+      decidedBy: actor.id,
+      decidedAt: new Date(),
+    });
+
+    console.log("  part requests (one waiting, one approved)");
+  }
+
   const [{ count }] = await db.execute<{ count: string }>(
     sql`SELECT count(*)::text AS count FROM stock_movements`,
   );

@@ -134,7 +134,7 @@ export function InvoicePanel({
   const busy = uploading || extracting || suggesting;
 
   return (
-    <section className="rounded-xl border border-border bg-surface">
+    <section className="panel rounded-xl">
       <header className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-5">
         <h2 className="text-base font-semibold">Invoice</h2>
         <div className="flex flex-wrap items-center gap-2">

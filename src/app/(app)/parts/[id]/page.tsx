@@ -8,7 +8,11 @@ import { components } from "@/db/schema";
 import { listMovements } from "@/db/queries/movements";
 import { canManageInventory, canUndoMovement, requireUser } from "@/lib/auth";
 import { getOnHandByLocation } from "@/lib/ledger";
-import { ExternalLinkIcon, PencilIcon } from "@/components/icons";
+import {
+  ExternalLinkIcon,
+  PencilIcon,
+  RequestIcon,
+} from "@/components/icons";
 import {
   Badge,
   Card,
@@ -118,25 +122,36 @@ export default async function PartDetailPage({
           }))}
         />
 
-        {component.productUrl || component.datasheetUrl || isAdmin ? (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {component.productUrl ? (
-              <ExternalLink href={component.productUrl}>Buy again</ExternalLink>
-            ) : null}
-            {component.datasheetUrl ? (
-              <ExternalLink href={component.datasheetUrl}>Datasheet</ExternalLink>
-            ) : null}
-            {isAdmin ? (
-              <Link
-                href={`/admin/parts/${component.id}`}
-                className={secondaryButtonClass}
-              >
-                <PencilIcon size={16} />
-                Edit part
-              </Link>
-            ) : null}
-          </div>
-        ) : null}
+        <div className="mt-3 flex flex-wrap gap-2">
+          {/*
+            The spec's answer to "an engineer needs something that isn't in
+            stock" starts here, on the screen they are already looking at when
+            they find out. Always offered, because wanting more of a part that
+            is merely low is as ordinary as wanting one that has run out.
+          */}
+          <Link
+            href={`/requests/new?component=${component.id}`}
+            className={secondaryButtonClass}
+          >
+            <RequestIcon size={16} />
+            {total === 0 ? "Ask for one" : "Ask for more"}
+          </Link>
+          {component.productUrl ? (
+            <ExternalLink href={component.productUrl}>Buy again</ExternalLink>
+          ) : null}
+          {component.datasheetUrl ? (
+            <ExternalLink href={component.datasheetUrl}>Datasheet</ExternalLink>
+          ) : null}
+          {isAdmin ? (
+            <Link
+              href={`/admin/parts/${component.id}`}
+              className={secondaryButtonClass}
+            >
+              <PencilIcon size={16} />
+              Edit part
+            </Link>
+          ) : null}
+        </div>
       </Card>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">

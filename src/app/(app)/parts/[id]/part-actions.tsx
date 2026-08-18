@@ -74,7 +74,7 @@ export function PartActions({
             role="dialog"
             aria-modal="true"
             aria-label="Choose a location"
-            className="safe-bottom w-full max-w-md rounded-t-2xl border border-border bg-surface p-5 shadow-(--shadow-panel) sm:rounded-2xl"
+            className="safe-bottom w-full max-w-md rounded-t-2xl panel-glass p-5 sm:rounded-2xl"
           >
             <h2 className="text-lg font-semibold">Take from where?</h2>
             <ul className="mt-3 divide-y divide-border">

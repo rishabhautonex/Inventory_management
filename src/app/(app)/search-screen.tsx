@@ -107,7 +107,7 @@ export function SearchScreen() {
       />
 
       {/* Sticky so the box stays reachable while thumbing through a long list. */}
-      <div className="sticky top-16 z-10 -my-2 bg-background py-2">
+      <div className="chrome-glass sticky top-16 z-10 -my-2 py-2">
         <div className="relative">
           <SearchIcon className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted" />
           <input
@@ -121,7 +121,7 @@ export function SearchScreen() {
             placeholder="Search by name, part number or keyword…"
             value={query}
             onChange={(e) => changeQuery(e.target.value)}
-            className="h-14 w-full rounded-xl border border-border bg-surface pl-12 pr-14 text-base text-foreground outline-none transition-colors placeholder:text-muted focus:border-accent [&::-webkit-search-cancel-button]:appearance-none"
+            className="panel h-14 w-full rounded-xl pl-12 pr-14 text-base text-foreground outline-none transition-colors placeholder:text-muted focus:border-accent [&::-webkit-search-cancel-button]:appearance-none"
             aria-label="Search parts"
           />
           {query ? (

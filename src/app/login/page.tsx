@@ -25,16 +25,27 @@ export default async function LoginPage({
   const config = isConfigured();
 
   return (
-    <div className="flex min-h-dvh flex-col">
-      <header className="flex h-16 shrink-0 items-center px-6">
-        <span className="brand-mark text-xl font-bold tracking-tight">
-          LabStock
+    <div className="grid-backdrop aurora relative isolate flex min-h-dvh flex-col">
+      <header className="relative flex h-16 shrink-0 items-center gap-2.5 px-6">
+        <span
+          aria-hidden
+          className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent text-accent-foreground shadow-[0_6px_16px_-8px_var(--accent)]"
+        >
+          <CubeIcon size={18} />
+        </span>
+        <span>
+          <span className="brand-mark block text-lg font-bold leading-none tracking-tight">
+            LabStock
+          </span>
+          <span className="eyebrow mt-1 block text-[0.5625rem] text-muted">
+            R&amp;D inventory
+          </span>
         </span>
       </header>
 
-      <main className="flex flex-1 items-center justify-center px-4 pb-16">
+      <main className="relative flex flex-1 items-center justify-center px-4 pb-16">
         {config.ok ? (
-          <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-6 shadow-(--shadow-panel) sm:p-8">
+          <div className="w-full max-w-md rounded-2xl panel-glass p-6 sm:p-8">
             <div className="flex flex-col items-center text-center">
               <span className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/15 text-accent-text">
                 <CubeIcon size={30} />
@@ -69,7 +80,7 @@ export default async function LoginPage({
             </p>
           </div>
         ) : (
-          <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-6 shadow-(--shadow-panel) sm:p-8">
+          <div className="w-full max-w-md rounded-2xl panel-glass p-6 sm:p-8">
             <h1 className="text-2xl font-bold tracking-tight">
               LabStock needs setting up
             </h1>

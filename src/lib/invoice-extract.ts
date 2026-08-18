@@ -475,11 +475,11 @@ export type ExtractedLine = {
 };
 
 /** 2%, or a rupee, whichever is larger — enough for rounding and paise drift. */
-function multipliesOut(qty: number, rate: number, amount: number): boolean {
+export function multipliesOut(qty: number, rate: number, amount: number): boolean {
   return Math.abs(qty * rate - amount) <= Math.max(1, amount * 0.02);
 }
 
-function isPlausibleQty(value: number): boolean {
+export function isPlausibleQty(value: number): boolean {
   return Number.isInteger(value) && value >= 1 && value <= 100_000;
 }
 

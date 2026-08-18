@@ -15,7 +15,7 @@ import {
   secondaryButtonClass,
   selectClass,
 } from "@/components/ui";
-import { ComponentPicker } from "./component-picker";
+import { ComponentPicker } from "@/components/component-picker";
 
 type Choice = { componentId: string; name: string; mpn: string | null };
 
@@ -133,7 +133,7 @@ export function OrderForm({
 
   return (
     <>
-      <section className="space-y-5 rounded-xl border border-border bg-surface p-4 sm:p-6">
+      <section className="space-y-5 panel rounded-xl p-4 sm:p-6">
         <h2 className="text-base font-semibold">Where it came from</h2>
 
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -245,7 +245,7 @@ export function OrderForm({
         </div>
       </section>
 
-      <section className="mt-4 rounded-xl border border-border bg-surface p-4 sm:p-6">
+      <section className="mt-4 panel rounded-xl p-4 sm:p-6">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold">What was bought</h2>
           <button type="button" onClick={addLine} className={ghostButtonClass}>
