@@ -72,6 +72,8 @@ src/app/manifest.ts     the installable web-app manifest
 src/components/ui.tsx   the design system: Card, Panel, StatCard, Badge,
                         buttons, inputs, table parts
 src/components/icons.tsx  the icon set, hand-rolled, currentColor
+src/components/component-picker.tsx  picks a catalogue part, and is the one
+                        place a missing one can be catalogued mid-task
 src/components/sidebar.tsx  desktop nav; bottom-nav.tsx is its phone counterpart
 drizzle/                migrations; 0001 holds triggers, views, trgm indexes
 vercel.json             the two cron schedules, in UTC
@@ -347,6 +349,37 @@ built.
 consistency-based delimiter detection, shared with the BOM import so the two can
 never disagree about what a cell is.
 
+## Cataloguing a part from wherever you noticed it missing
+
+[INVENTORY_SPEC.md:232](INVENTORY_SPEC.md#L232) asks that unmatched rows "offer
+'create new part'" and that nothing be created **silently**. Both halves live in
+[components/component-picker.tsx](src/components/component-picker.tsx), so every
+screen that picks a part — an order line, an invoice line, a BOM row, a request,
+converting a request — offers the same thing in the same shape:
+
+- **The catalogue is searched before it is added to.** The offer sits *under* the
+  results, never instead of them, because the person about to add a second "10k
+  resistor" needs to see the first one first.
+- **A person types the name and presses a button that says what it will add.**
+  Nothing is inferred from a row, an invoice or a filename — the seeded name is
+  editable and required, so the silent creation the spec forbids cannot happen
+  by accident.
+- **Only name, MPN and keywords are asked for**, because those are what make a
+  part findable and findability is the only thing the catalogue is for.
+  Manufacturer, datasheet and photo are unrelated to finding it and wait for the
+  part's own page. The keywords hint says the name is already searched, so the
+  field is for nicknames rather than a second copy of the name.
+- **`canCreate` is a prop, not an assumption.** Most screens holding a picker
+  are already behind `canManageInventory`, but a BOM upload is open to a project
+  head and raising a request is open to everyone — and offering either of them a
+  button the server will refuse is worse than not offering it. Those two screens
+  pass `canManageInventory(user)` down; the rest set it because that gate is why
+  they are on screen at all. `createComponentAction` re-checks regardless.
+
+What this replaces is a link to `/admin/parts/new` in a new tab, which meant
+abandoning a half-reviewed invoice or BOM to make one part exist, then finding
+your place again.
+
 ## Vendors
 
 `resolveVendorByName()` creates a vendor as somebody types an invoice, which is
@@ -490,6 +523,35 @@ work other people did.
 though it resolves to the same people as `canManageInventory`, because it is the
 only project write that destroys rows somebody else created.
 
+## Deleting a location
+
+`deleteLocationCascade()` in [lib/locations.ts](src/lib/locations.ts) is the only
+path, and its rule is narrower than the project one:
+
+**A location any movement has ever named cannot be deleted at all.** Every row
+of the append-only log names a location, so a row naming somewhere that is gone
+is a log that cannot be read. `stock_movements.location_id` is `ON DELETE
+restrict` and says the same thing; the check in the function exists so somebody
+is told *which* shelf holds the history and offered Retire, rather than being
+handed a constraint name. It counts movements, not on-hand: a shelf emptied back
+to zero, or filled and reversed, still has a log naming it.
+
+Retiring is the reversible option and is what a shelf that has been used gets —
+it keeps every movement and stops the location being offered when somebody puts
+parts away. Deleting is for one that should never have existed: a typo, a
+duplicate, a shelf added to the wrong cupboard ten seconds ago.
+
+What it does take with it, both in one transaction and both in counts the
+confirmation states and the toast repeats: the shelves and bins **inside** it,
+deepest first because `locations.parent_id` is `restrict` too, and the
+**minimums** set on any of them. The thresholds would cascade on their own; they
+are deleted explicitly so the number shown is a counted one.
+
+There is no retyped confirmation here, unlike a project, and that is the same
+reasoning rather than a lapse from it: the history guard means this delete cannot
+destroy work somebody else did, so it stays behind `canManageInventory` and one
+danger panel. `tests/locations.test.ts` pins the refusals and the counts.
+
 ## Part requests
 
 ```
@@ -526,10 +588,18 @@ buys `approved_qty ?? qty`, because ordering the full ask would quietly overrule
 the decision the request exists to record.
 
 A rejection needs a note: the spec asks for it, the `part_requests_rejection_needs_note`
-check enforces it, and the form asks for it before offering the button. A
-free-text request cannot be converted, because an order line needs a real
-catalogue part; the UI sends the admin to catalogue it first rather than
-inventing a component with no search keywords.
+check enforces it, and the form asks for it before offering the button.
+
+**A free-text request is converted by saying which part it turned out to be.**
+An order line still needs a real catalogue part, so `convertRequestToOrderAction`
+takes a `componentId` — and the convert panel's picker will catalogue one from
+the requester's own wording. What it does *not* do is write that part back onto
+the request: `part_requests.free_text` stays exactly as it was raised, for the
+reason `approved_qty` is a separate column. What was asked for and what was
+bought are two facts, and the order line records the second. The
+`componentId` is only consulted when the request names no part of its own; one
+that disagrees with a request that does is refused, because a request pointing
+at a part is an approval for *that* part.
 
 Requests raised for a project with no head assigned fall through to the admins.
 Without that they would sit unseen for ever.
@@ -543,10 +613,26 @@ re-reads the uploaded text.
 
 - **A quantity that could not be read is `null`, not a guess** — the same rule
   as the invoice flow. The review row leaves the field blank and carries a note.
-- **Nothing here creates a component.** Unmatched rows link out to
-  `/admin/parts/new`, per the spec, because a part conjured mid-import arrives
-  with no search keywords and an unfindable part is what the catalogue exists to
-  prevent.
+- **A blank MPN falls back to the name.** When a table names both, the MPN
+  column leads — but half a lab's parts are bought by description and have no
+  MPN at all, and a row whose leading column is empty used to be dropped as "no
+  part on this line". Losing a part somebody meant to order is the one thing
+  this parser must not do, so the other text column identifies the row instead.
+- **[public/bom-template.csv](public/bom-template.csv) is the shipped starting
+  point**, linked from the upload screen. Its headings are chosen against the
+  patterns in `bom-parse.ts` — `Part Name` / `MPN` / `Quantity`, plus
+  `Reference` and `Notes` that the parser ignores and the reviewer can still
+  read off `raw`. `tests/bom.test.ts` parses the real file both ways, as an
+  uploaded CSV and as an Excel paste (the same cells, tab-separated), so a
+  heading edited into something the parser stops recognising fails the build
+  rather than reaching somebody's spreadsheet. There is no `.xlsx` reader:
+  a workbook is saved as CSV or copied out of, and the screen says so.
+- **Nothing here creates a component on its own.** An unmatched row offers
+  "create new part", as the spec requires, and the offer is the picker's —
+  seeded with the row's text, with the name and keywords typed by a person. See
+  **Cataloguing a part from wherever you noticed it missing**. A project head
+  may upload a BOM but does not run the catalogue, so they get the row and the
+  reason and no button.
 - **Matching is exact-then-fuzzy**, in that order:
   [bom-match.ts](src/lib/bom-match.ts) resolves normalised MPN through
   `squash_search` — the same normalisation as the unique index on

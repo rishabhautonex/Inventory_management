@@ -29,8 +29,10 @@ import {
  *
  * A row with no catalogue match cannot be saved into the BOM. The spec is
  * explicit that unmatched rows offer "create new part" rather than silently
- * creating one, so the row links out to the proper form — where the search
- * keywords that make a part findable get filled in — and waits.
+ * creating one, and that offer is now in the picker itself: an admin catalogues
+ * the missing part from the row — name and keywords, typed by a person — and
+ * carries on down the list. A project head, who may upload a BOM but does not
+ * run the catalogue, still gets the row and the reason, and no button.
  */
 
 type Choice = { componentId: string; name: string; mpn: string | null };
@@ -63,9 +65,16 @@ Resistor 10k 1%,CFR-25JB-52-10K,50`;
 export function BomImport({
   projectId,
   projectName,
+  canCreateParts,
 }: {
   projectId: string;
   projectName: string;
+  /**
+   * Whether this person may add to the catalogue. Uploading a BOM is open to a
+   * project head, which is wider than the catalogue gate, so this cannot be
+   * inferred from being on the screen.
+   */
+  canCreateParts: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -202,6 +211,19 @@ export function BomImport({
                 Read {fileName}. Check it below before importing.
               </span>
             ) : null}
+            <p className="mt-1.5 text-xs text-muted">
+              Nothing to start from?{" "}
+              <a
+                href="/bom-template.csv"
+                download
+                className="font-medium text-accent-text underline underline-offset-2"
+              >
+                Download the template
+              </a>{" "}
+              — it opens in Excel and Google Sheets. Fill in your rows, then
+              save it as CSV and upload it, or copy the cells and paste them
+              below. An .xlsx workbook cannot be read directly.
+            </p>
           </div>
 
           <div className="flex items-center gap-3">
@@ -381,6 +403,8 @@ export function BomImport({
                                 onChange={(choice) =>
                                   patch(line.key, { picked: choice })
                                 }
+                                canCreate={canCreateParts}
+                                suggestedName={line.identifier}
                               />
                               {line.matches.length > 0 ? (
                                 <button
@@ -407,14 +431,9 @@ export function BomImport({
                                 {line.identifier}
                               </span>
                               .{" "}
-                              <Link
-                                href="/admin/parts/new"
-                                target="_blank"
-                                className="text-accent-text hover:underline"
-                              >
-                                Add it as a new part
-                              </Link>
-                              , then search for it here.
+                              {canCreateParts
+                                ? "Search for it, or add it to the catalogue above."
+                                : "A part has to exist before a BOM can ask for it — an admin can catalogue this one."}
                             </p>
                           ) : null}
                         </div>

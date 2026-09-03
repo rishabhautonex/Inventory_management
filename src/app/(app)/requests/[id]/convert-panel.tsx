@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { convertRequestToOrderAction } from "@/app/actions/requests";
+import { ComponentPicker } from "@/components/component-picker";
 import { useToast } from "@/components/toast";
 import { ReceiptIcon } from "@/components/icons";
 import {
@@ -15,6 +16,8 @@ import {
   selectClass,
 } from "@/components/ui";
 
+type Choice = { componentId: string; name: string; mpn: string | null };
+
 /**
  * Turns an approved request into a purchase.
  *
@@ -25,13 +28,26 @@ import {
  * The quantity is editable because buying is not always granting: a request for
  * four when they come in packs of five is a real thing that happens, and the
  * order should record what was actually bought.
+ *
+ * A request raised as free text arrives here with no part at all, and used to
+ * be a dead end — an order line needs a real catalogue part, and there was
+ * nowhere to say which one it turned out to be. Now the panel asks, with the
+ * requester's own words seeding the new-part form, so "a 7.5in e-paper display"
+ * becomes a catalogued part and an order in one sitting. The request's wording
+ * is not overwritten: what was asked for and what was bought are two facts.
  */
 export function ConvertPanel({
   requestId,
+  componentId,
+  label,
   qty,
   vendors,
 }: {
   requestId: string;
+  /** The part the request names, or null when it was raised as free text. */
+  componentId: string | null;
+  /** What the request calls the part — the catalogue name, or the free text. */
+  label: string;
   qty: number;
   vendors: Array<{ id: string; name: string }>;
 }) {
@@ -39,6 +55,8 @@ export function ConvertPanel({
   const toast = useToast();
   const [pending, startTransition] = useTransition();
 
+  /** Only used when the request names no part of its own. */
+  const [choice, setChoice] = useState<Choice | null>(null);
   const [vendorName, setVendorName] = useState("");
   const [channel, setChannel] = useState<"online" | "offline">("online");
   const [orderQty, setOrderQty] = useState(String(qty));
@@ -55,9 +73,15 @@ export function ConvertPanel({
       return;
     }
 
+    if (!componentId && !choice) {
+      setError("Say which catalogue part this is, or add it to the catalogue.");
+      return;
+    }
+
     startTransition(async () => {
       const result = await convertRequestToOrderAction({
         requestId,
+        componentId: componentId ?? choice?.componentId ?? null,
         vendorName: vendorName.trim() || null,
         channel,
         qty: quantity,
@@ -79,6 +103,22 @@ export function ConvertPanel({
   return (
     <Panel title="Turn it into an order">
       <div className="space-y-4">
+        {componentId ? null : (
+          <Field
+            label="Which part"
+            hint="Asked for as free text, so nothing has checked the catalogue for it — search first, and add it only if the lab has never bought one."
+          >
+            {/* This panel is only rendered for somebody who
+                `canManageInventory`, the gate the create action re-checks. */}
+            <ComponentPicker
+              value={choice}
+              onChange={setChoice}
+              canCreate
+              suggestedName={label}
+            />
+          </Field>
+        )}
+
         <Field label="Vendor" hint="Left blank if it is not decided yet.">
           <input
             className={inputClass}

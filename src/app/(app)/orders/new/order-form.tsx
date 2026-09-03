@@ -267,9 +267,12 @@ export function OrderForm({
             >
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_6rem_8rem_auto] sm:items-end">
                 <Field label="Part">
+                  {/* This screen is already behind `canManageInventory`, which
+                      is the same gate `createComponentAction` re-checks. */}
                   <ComponentPicker
                     value={line.choice}
                     onChange={(choice) => updateLine(line.key, { choice })}
+                    canCreate
                   />
                 </Field>
 

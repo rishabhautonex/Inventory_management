@@ -20,6 +20,10 @@ import {
   requireUser,
   type Role,
 } from "@/lib/auth";
+import {
+  deleteLocationCascade,
+  type LocationDeletion,
+} from "@/lib/locations";
 import { deleteProjectCascade, type ProjectDeletion } from "@/lib/projects";
 import { checkStockAlerts } from "@/lib/stock-alerts";
 
@@ -316,6 +320,64 @@ export async function setLocationActiveAction(
 
   revalidatePath("/admin/locations");
   return { ok: true };
+}
+
+/**
+ * Deletes a location, the shelves and bins inside it, and the minimums set on
+ * them.
+ *
+ * The work is in `deleteLocationCascade()`, which takes a database handle so the
+ * exact SQL runs in the tests. What lives here is the part that cannot: who may
+ * ask for it, and turning a refusal into a sentence.
+ *
+ * `canManageInventory` rather than a predicate of its own, unlike deleting a
+ * project: a location with any history against it is refused outright, so this
+ * is the one delete in the application that cannot destroy work somebody else
+ * did. Retiring is what a shelf that has been used gets, and it keeps every
+ * movement.
+ */
+export async function deleteLocationAction(
+  locationId: string,
+): Promise<Result & { data?: LocationDeletion }> {
+  const user = await requireUser();
+  if (!canManageInventory(user)) {
+    return { ok: false, error: "Only admins and managers can manage locations." };
+  }
+
+  try {
+    const id = z.string().uuid().parse(locationId);
+    const result = await deleteLocationCascade(db, id);
+
+    if (!result.ok) {
+      if (result.reason === "missing") {
+        return { ok: false, error: "That location no longer exists." };
+      }
+
+      // Named, because the shelf holding the history is often one inside the
+      // cupboard somebody is trying to delete, and "it has movements" would
+      // leave them looking at a cupboard that appears empty.
+      const [first, ...rest] = result.named;
+      const where =
+        rest.length === 0
+          ? first
+          : `${first} and ${rest.length} other${rest.length === 1 ? "" : "s"}`;
+
+      return {
+        ok: false,
+        error: `${where} ${result.movements === 1 ? "has" : "have"} ${result.movements} movement${
+          result.movements === 1 ? "" : "s"
+        } in the log. Retire it instead — the log names it.`,
+      };
+    }
+
+    revalidatePath("/admin/locations");
+    // A minimum may have gone with it, and the take-out screens offer locations.
+    revalidatePath("/admin/thresholds");
+    revalidatePath("/");
+    return { ok: true, data: result.deleted };
+  } catch (error) {
+    return problem(error, "Could not delete the location.");
+  }
 }
 
 /* -------------------------------------------------------------------------- */

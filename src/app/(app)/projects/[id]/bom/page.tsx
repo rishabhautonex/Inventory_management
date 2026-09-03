@@ -2,7 +2,11 @@ import { notFound } from "next/navigation";
 
 import { db } from "@/db";
 import { getProject } from "@/db/queries/projects";
-import { canManageProjectBom, requireUser } from "@/lib/auth";
+import {
+  canManageInventory,
+  canManageProjectBom,
+  requireUser,
+} from "@/lib/auth";
 import { NoAccess, Page, PageHeader } from "@/components/ui";
 import { BomImport } from "./bom-import";
 
@@ -36,7 +40,13 @@ export default async function BomImportPage({
         description={`The parts list for ${project.name}. Nothing is saved until you have checked every row.`}
         back={{ href: `/projects/${project.id}`, label: project.name }}
       />
-      <BomImport projectId={project.id} projectName={project.name} />
+      <BomImport
+        projectId={project.id}
+        projectName={project.name}
+        // Narrower than the gate on this page: a head uploads the BOM, an
+        // admin owns the catalogue it points at.
+        canCreateParts={canManageInventory(user)}
+      />
     </Page>
   );
 }

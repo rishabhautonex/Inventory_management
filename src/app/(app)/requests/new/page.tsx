@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { runQuery } from "@/db/rows";
-import { requireUser } from "@/lib/auth";
+import { canManageInventory, requireUser } from "@/lib/auth";
 import { Card, EmptyState, Page, PageHeader } from "@/components/ui";
 import { RequestForm } from "./request-form";
 
@@ -20,7 +20,7 @@ export default async function NewRequestPage({
 }: {
   searchParams: Promise<{ project?: string; component?: string }>;
 }) {
-  await requireUser();
+  const user = await requireUser();
   const params = await searchParams;
 
   const projects = await runQuery<{ id: string; name: string; code: string }>(
@@ -67,6 +67,7 @@ export default async function NewRequestPage({
                 }
               : null
           }
+          canCreateParts={canManageInventory(user)}
         />
       )}
     </Page>

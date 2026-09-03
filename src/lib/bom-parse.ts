@@ -169,15 +169,24 @@ export function parseBom(input: string): BomParseResult {
     const cells = body[i];
     const columns = header ?? readByShape(cells);
 
-    const identifier = (cells[columns.identifier] ?? "").trim();
+    const primaryCell = (cells[columns.identifier] ?? "").trim();
+    const otherCell =
+      columns.secondary === null ? "" : (cells[columns.secondary] ?? "").trim();
+
+    // A part with a name but no MPN is entirely ordinary — a jumper set, a
+    // printed bracket, anything bought by description. When the MPN column
+    // leads and this row left it blank, the name identifies the part instead;
+    // dropping the row would lose something somebody meant to order, which is
+    // the one thing this parser must never do.
+    const usable = primaryCell !== "" && !isNumericCell(primaryCell);
+    const identifier = usable ? primaryCell : otherCell;
+    const secondaryCell = usable ? otherCell : "";
+
     if (identifier === "" || isNumericCell(identifier)) {
       // No part on this line — a totals row, a blank separator, a stray note.
       dropped++;
       continue;
     }
-
-    const secondaryCell =
-      columns.secondary === null ? null : (cells[columns.secondary] ?? "").trim();
 
     const qtyCell = columns.qty === null ? "" : (cells[columns.qty] ?? "").trim();
     const qty = qtyCell === "" ? null : readQuantity(qtyCell);

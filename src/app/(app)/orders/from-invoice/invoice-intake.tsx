@@ -569,6 +569,14 @@ export function InvoiceIntake({
                                     onChange={(choice) =>
                                       patch(line.key, { searched: choice })
                                     }
+                                    /* Behind `canManageInventory` already,
+                                       the same gate the create action
+                                       re-checks. */
+                                    canCreate
+                                    /* What the invoice calls it, so a part
+                                       the lab has never bought before is
+                                       catalogued without retyping the line. */
+                                    suggestedName={line.description}
                                   />
                                 )}
                               </div>

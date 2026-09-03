@@ -1,0 +1,4 @@
+Part Name,MPN,Quantity,Reference,Notes
+ESP32 DevKit v1,ESP32-DEVKITC-32D,4,U1-U4,One per node
+"Resistor, 10k 1% 0805",CFR-25JB-52-10K,50,R1-R50,
+Jumper wire set 40pin,,2,,No MPN - matched on the name

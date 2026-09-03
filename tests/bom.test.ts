@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { after, before, describe, test } from "node:test";
 
 import {
@@ -14,6 +15,7 @@ import {
 import { getBomShortfall, listProjectBoms } from "../src/db/queries/bom";
 import { parseBom, readQuantity } from "../src/lib/bom-parse";
 import { matchBomRows } from "../src/lib/bom-match";
+import { readTable } from "../src/lib/table-parse";
 import { recordMovement } from "../src/lib/ledger";
 import { createTestDb, errorText, type TestDb } from "./harness";
 
@@ -201,6 +203,54 @@ describe("reading a BOM", () => {
     assert.equal(result.rows.length, 2);
     assert.equal(result.droppedLines, 1);
     assert.ok(!result.rows.some((row) => row.identifier === "12"));
+  });
+
+  test("a blank MPN falls back to the name rather than losing the part", () => {
+    // Half a lab's parts are bought by description and have no MPN at all. The
+    // MPN column leading must not mean a row that left it empty disappears.
+    const result = parseBom(
+      [
+        "Part,MPN,Qty",
+        "ESP32 DevKit v1,ESP32-DEVKITC-32D,4",
+        "Jumper wire set 40pin,,2",
+      ].join("\n"),
+    );
+
+    assert.equal(result.droppedLines, 0);
+    assert.equal(result.rows.length, 2);
+    assert.equal(result.rows[1].identifier, "Jumper wire set 40pin");
+    assert.equal(result.rows[1].secondary, null);
+    assert.equal(result.rows[1].qty, 2);
+  });
+
+  test("the shipped template reads the same as a file and as a paste", () => {
+    const csv = readFileSync(
+      new URL("../public/bom-template.csv", import.meta.url),
+      "utf8",
+    );
+    // Excel's clipboard is the same cells, tab-separated.
+    const pasted = readTable(csv)
+      .table.map((cells) => cells.join("\t"))
+      .join("\n");
+
+    for (const [route, result] of [
+      ["file", parseBom(csv)],
+      ["paste", parseBom(pasted)],
+    ] as const) {
+      assert.equal(result.headerSkipped, true, route);
+      assert.equal(result.droppedLines, 0, route);
+      assert.equal(result.rows.length, 3, route);
+      // Every example row is complete: nothing in the template asks the
+      // reviewer to finish a quantity the template itself left blank.
+      assert.ok(
+        result.rows.every((row) => row.qty !== null && row.note === null),
+        route,
+      );
+      // A quoted part name survives both routes as one cell.
+      assert.equal(result.rows[1].secondary, "Resistor, 10k 1% 0805", route);
+      // And the row with no MPN is identified by its name.
+      assert.equal(result.rows[2].identifier, "Jumper wire set 40pin", route);
+    }
   });
 
   test("a table with no heading row is read by shape", () => {

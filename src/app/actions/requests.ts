@@ -325,6 +325,14 @@ const convertSchema = z.object({
   expectedDate: z.string().nullable().optional(),
   /** Lets an admin buy more or less than was asked for. */
   qty: z.number().int().positive().nullable().optional(),
+  /**
+   * Which catalogue part to buy, for a request that was raised as free text.
+   *
+   * Only consulted when the request names no part of its own: a request that
+   * points at one is an approval for *that* part, and quietly buying a
+   * different one would overrule the decision the request exists to record.
+   */
+  componentId: z.string().uuid().nullable().optional(),
 });
 
 export type ConvertRequestInput = z.input<typeof convertSchema>;
@@ -344,10 +352,15 @@ function parseLabDate(value: string | null | undefined): Date | null {
  * The link back is `part_requests.order_id`, which is what lets the requester
  * be told when it eventually lands.
  *
- * A free-text request cannot be converted, because an order line needs a real
- * catalogue part. The UI sends the admin to catalogue it first rather than
- * inventing a component here: a part created mid-order arrives with no search
- * keywords, and an unfindable part is the failure the catalogue exists to stop.
+ * A free-text request still cannot be converted on its own, because an order
+ * line needs a real catalogue part — but the admin can now say which part it
+ * turned out to be, `componentId`, catalogued from the request screen. Nothing
+ * is invented here: the component already exists by the time this runs, created
+ * by a person who typed its name and keywords.
+ *
+ * The request's own wording is left exactly as it was raised. What was asked for
+ * and what was bought are two facts, and the order line records the second, so
+ * `part_requests.free_text` stays the evidence of the first.
  */
 export async function convertRequestToOrderAction(
   input: ConvertRequestInput,
@@ -384,11 +397,30 @@ export async function convertRequestToOrderAction(
     if (existing.status !== "approved") {
       return { ok: false, error: "Only an approved request can be ordered." };
     }
-    if (!existing.component_id) {
+    /**
+     * Which part to buy. A request that names one is an approval for that part
+     * and nothing else, so a `componentId` disagreeing with it is refused
+     * rather than silently ignored — being told is how somebody discovers they
+     * had the wrong request open.
+     */
+    if (
+      existing.component_id &&
+      parsed.componentId &&
+      parsed.componentId !== existing.component_id
+    ) {
       return {
         ok: false,
         error:
-          "This asks for something not in the catalogue yet. Add the part first, then order it.",
+          "This request asks for a particular part. Order that one, or raise a fresh request for the other.",
+      };
+    }
+
+    const componentId = existing.component_id ?? parsed.componentId ?? null;
+    if (!componentId) {
+      return {
+        ok: false,
+        error:
+          "This asks for something not in the catalogue yet. Catalogue the part on this screen, then order it.",
       };
     }
 
@@ -420,13 +452,7 @@ export async function convertRequestToOrderAction(
             : parsed.unitPrice * qty,
         createdBy: auth.user.id,
       },
-      [
-        {
-          componentId: existing.component_id,
-          qty,
-          unitPrice: parsed.unitPrice ?? null,
-        },
-      ],
+      [{ componentId, qty, unitPrice: parsed.unitPrice ?? null }],
     );
 
     // Guarded on `approved` so a second click cannot attach a second order to

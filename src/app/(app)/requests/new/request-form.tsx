@@ -31,10 +31,17 @@ export function RequestForm({
   projects,
   defaultProjectId,
   defaultComponent,
+  canCreateParts,
 }: {
   projects: Array<{ id: string; name: string; code: string }>;
   defaultProjectId?: string;
   defaultComponent: Choice | null;
+  /**
+   * Whether this person may catalogue the part themselves. Raising a request is
+   * open to everyone, so most people asking here cannot — and for them
+   * "something new" is the whole point of the free-text tab.
+   */
+  canCreateParts: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -120,7 +127,11 @@ export function RequestForm({
           </div>
 
           {mode === "catalogue" ? (
-            <ComponentPicker value={choice} onChange={setChoice} />
+            <ComponentPicker
+              value={choice}
+              onChange={setChoice}
+              canCreate={canCreateParts}
+            />
           ) : (
             <>
               <input

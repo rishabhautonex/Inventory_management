@@ -248,8 +248,13 @@ export function LineEditor({
         </div>
       ) : adding ? (
         <div className="space-y-3">
-          <Field label="Part" hint="Must already be in the catalogue — an order line needs a real part.">
-            <ComponentPicker value={choice} onChange={setChoice} />
+          <Field
+            label="Part"
+            hint="An order line needs a real catalogue part. One can be added from the search box."
+          >
+            {/* Only rendered for somebody who `canManageInventory`, which is
+                the gate `createComponentAction` re-checks server-side. */}
+            <ComponentPicker value={choice} onChange={setChoice} canCreate />
           </Field>
 
           <div className="grid gap-3 sm:grid-cols-2">

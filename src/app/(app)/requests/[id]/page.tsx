@@ -17,7 +17,6 @@ import {
   Page,
   PageHeader,
   Panel,
-  secondaryButtonClass,
 } from "@/components/ui";
 import { orderRef } from "../../orders/order-ref";
 import { REQUEST_STATUS_LABEL, REQUEST_STATUS_TONE } from "../request-status";
@@ -184,30 +183,17 @@ export default async function RequestPage({
           ) : null}
 
           {canOrder ? (
-            request.componentId ? (
-              <ConvertPanel
-                requestId={request.id}
-                // What the head approved, not what was asked for. Buying the
-                // full ask when it was cut down would overrule the decision.
-                qty={request.approvedQty ?? request.qty}
-                vendors={vendors}
-              />
-            ) : (
-              <Panel title="Catalogue it first">
-                <p className="text-sm text-muted">
-                  An order line needs a real catalogue part, and this asks for
-                  something that is not in it yet. Add the part — with search
-                  keywords, so it can be found again — then come back and order
-                  it.
-                </p>
-                <Link
-                  href="/admin/parts/new"
-                  className={`${secondaryButtonClass} mt-4`}
-                >
-                  Add the part
-                </Link>
-              </Panel>
-            )
+            <ConvertPanel
+              requestId={request.id}
+              // Null for a free-text request: the panel asks which part it
+              // turned out to be, and can catalogue it on the spot.
+              componentId={request.componentId}
+              label={request.label}
+              // What the head approved, not what was asked for. Buying the
+              // full ask when it was cut down would overrule the decision.
+              qty={request.approvedQty ?? request.qty}
+              vendors={vendors}
+            />
           ) : null}
 
           {!canDecide && !canOrder && request.status === "pending" ? (
