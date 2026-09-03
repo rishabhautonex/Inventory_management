@@ -10,10 +10,22 @@ import {
   getProjectStock,
   listProjectSignals,
 } from "../src/db/queries/projects";
-import { boms, bomLines, orderLines, orders, projects, stockThresholds } from "../src/db/schema";
+import {
+  boms,
+  bomLines,
+  locations,
+  orderLines,
+  orders,
+  partRequests,
+  projectLeads,
+  projects,
+  stockMovements,
+  stockThresholds,
+} from "../src/db/schema";
 import { canViewOrder, type SessionUser } from "../src/lib/auth";
 import { issueStock, recordMovement } from "../src/lib/ledger";
-import { createTestDb, makeFixtures, type TestDb } from "./harness";
+import { deleteProjectCascade } from "../src/lib/projects";
+import { createTestDb, errorText, makeFixtures, type TestDb } from "./harness";
 
 /**
  * What a project head can see.
@@ -464,5 +476,158 @@ describe("project details", () => {
     // The panel offers GitHub's own #readme anchor in this case, but it is
     // offered as a guess and never written to the row.
     assert.equal(project?.readmeUrl, null);
+  });
+});
+
+/**
+ * Deleting a project.
+ *
+ * Closing one is the reversible option and is what almost every case wants;
+ * deleting is for a project that should never have existed. What these tests
+ * pin is the line between the two halves of that operation — what is destroyed
+ * with the project, and what survives it holding no project any more — because
+ * getting it wrong in either direction is silent. Destroying a cupboard would
+ * take real parts off the record; keeping a request whose project is gone is
+ * exactly what the `restrict` on `part_requests.project_id` refuses.
+ */
+describe("deleting a project", () => {
+  test("destroys its BOMs and its part requests, and says how many", async () => {
+    const f = await makeFixtures(db);
+
+    const [bom] = await db
+      .insert(boms)
+      .values({ projectId: f.project.id, name: "Rev A" })
+      .returning();
+    await db
+      .insert(bomLines)
+      .values({ bomId: bom.id, componentId: f.component.id, qtyNeeded: 4 });
+
+    await db.insert(partRequests).values({
+      requestedBy: f.user.id,
+      projectId: f.project.id,
+      componentId: f.component.id,
+      qty: 2,
+    });
+
+    const summary = await deleteProjectCascade(db, f.project.id);
+
+    assert.equal(summary?.deletedBoms, 1);
+    assert.equal(summary?.deletedRequests, 1);
+    assert.equal(summary?.code, f.project.code);
+
+    assert.deepEqual(
+      await db.select().from(projects).where(eq(projects.id, f.project.id)),
+      [],
+    );
+    assert.deepEqual(
+      await db.select().from(boms).where(eq(boms.id, bom.id)),
+      [],
+    );
+    // The lines go with their BOM, by cascade.
+    assert.deepEqual(
+      await db.select().from(bomLines).where(eq(bomLines.bomId, bom.id)),
+      [],
+    );
+  });
+
+  test("keeps its cupboards, and every movement against them", async () => {
+    const f = await makeFixtures(db);
+
+    await recordMovement(db, {
+      componentId: f.component.id,
+      locationId: f.shelf.id,
+      qtyDelta: 7,
+      reason: "receipt",
+      userId: f.user.id,
+    });
+
+    const summary = await deleteProjectCascade(db, f.project.id);
+    assert.equal(summary?.detachedCupboards, 1);
+
+    // The cupboard is still there, holding what it held. Only its filing is
+    // gone: deleting it would take real parts off the record, and the ledger
+    // would then describe stock nobody can find.
+    const [cupboard] = await db
+      .select()
+      .from(locations)
+      .where(eq(locations.id, f.cupboard.id));
+
+    assert.ok(cupboard, "the cupboard survives the project");
+    assert.equal(cupboard.projectId, null);
+
+    const movements = await db
+      .select()
+      .from(stockMovements)
+      .where(eq(stockMovements.locationId, f.shelf.id));
+
+    assert.equal(movements.length, 1);
+    assert.equal(movements[0].qtyDelta, 7);
+  });
+
+  test("keeps its orders, unfiled — money was still spent", async () => {
+    const f = await makeFixtures(db);
+
+    const [order] = await db
+      .insert(orders)
+      .values({
+        projectId: f.project.id,
+        channel: "online",
+        status: "ordered",
+        createdBy: f.user.id,
+      })
+      .returning();
+
+    const summary = await deleteProjectCascade(db, f.project.id);
+    assert.equal(summary?.detachedOrders, 1);
+
+    const [kept] = await db.select().from(orders).where(eq(orders.id, order.id));
+    assert.ok(kept, "the order survives the project");
+    assert.equal(kept.projectId, null);
+  });
+
+  test("removes its heads' assignments without touching the people", async () => {
+    const f = await makeFixtures(db);
+
+    await db
+      .insert(projectLeads)
+      .values({ projectId: f.project.id, userId: f.user.id });
+
+    const summary = await deleteProjectCascade(db, f.project.id);
+    assert.equal(summary?.removedHeads, 1);
+
+    assert.deepEqual(
+      await db
+        .select()
+        .from(projectLeads)
+        .where(eq(projectLeads.userId, f.user.id)),
+      [],
+    );
+  });
+
+  test("the database still refuses a project pulled out from under a request", async () => {
+    const f = await makeFixtures(db);
+
+    await db.insert(partRequests).values({
+      requestedBy: f.user.id,
+      projectId: f.project.id,
+      componentId: f.component.id,
+      qty: 1,
+    });
+
+    // `deleteProjectCascade()` is the one deliberate way through this, and it
+    // gets there by deleting the requests itself, in the same transaction and
+    // in a count it reports. Any other DELETE is still refused.
+    await assert.rejects(
+      () => db.delete(projects).where(eq(projects.id, f.project.id)),
+      (error: unknown) =>
+        /part_requests_project_id_projects_id_fk/.test(errorText(error)),
+    );
+  });
+
+  test("a project that is already gone deletes to null, not to an error", async () => {
+    const f = await makeFixtures(db);
+
+    assert.ok(await deleteProjectCascade(db, f.project.id));
+    assert.equal(await deleteProjectCascade(db, f.project.id), null);
   });
 });

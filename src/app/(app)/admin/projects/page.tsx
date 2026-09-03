@@ -2,7 +2,12 @@ import { sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { runQuery } from "@/db/rows";
-import { canManageInventory, canManageUsers, requireUser } from "@/lib/auth";
+import {
+  canDeleteProject,
+  canManageInventory,
+  canManageUsers,
+  requireUser,
+} from "@/lib/auth";
 import { NoAccess, Page, PageHeader } from "@/components/ui";
 import { ProjectManager } from "./project-manager";
 
@@ -15,6 +20,15 @@ export type ProjectRow = {
   status: "active" | "closed";
   leads: Array<{ id: string; name: string }>;
   cupboards: number;
+  /**
+   * What is filed under the project, counted here so the delete confirmation
+   * can state it rather than asking somebody to guess. `requests` and `boms`
+   * are destroyed with the project; `cupboards` and `orders` survive it and
+   * lose their project.
+   */
+  requests: number;
+  boms: number;
+  orders: number;
 };
 
 export default async function ProjectsPage() {
@@ -31,6 +45,9 @@ export default async function ProjectsPage() {
       status: "active" | "closed";
       leads: Array<{ id: string; name: string }> | null;
       cupboards: number | string;
+      requests: number | string;
+      boms: number | string;
+      orders: number | string;
     }>(
       db,
       sql`
@@ -48,7 +65,10 @@ export default async function ProjectsPage() {
             ),
             '[]'::json
           ) AS leads,
-          (SELECT count(*) FROM locations l WHERE l.project_id = p.id) AS cupboards
+          (SELECT count(*) FROM locations l WHERE l.project_id = p.id) AS cupboards,
+          (SELECT count(*) FROM part_requests r WHERE r.project_id = p.id) AS requests,
+          (SELECT count(*) FROM boms b WHERE b.project_id = p.id) AS boms,
+          (SELECT count(*) FROM orders o WHERE o.project_id = p.id) AS orders
         FROM projects p
         ORDER BY p.status, p.name
       `,
@@ -66,6 +86,9 @@ export default async function ProjectsPage() {
     status: row.status,
     leads: row.leads ?? [],
     cupboards: Number(row.cupboards),
+    requests: Number(row.requests),
+    boms: Number(row.boms),
+    orders: Number(row.orders),
   }));
 
   return (
@@ -79,6 +102,7 @@ export default async function ProjectsPage() {
         projects={projects}
         people={people}
         canAssignLeads={canManageUsers(user)}
+        canDelete={canDeleteProject(user)}
       />
     </Page>
   );

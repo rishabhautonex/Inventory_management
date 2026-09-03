@@ -14,11 +14,13 @@ import {
   users,
 } from "@/db/schema";
 import {
+  canDeleteProject,
   canManageInventory,
   canManageUsers,
   requireUser,
   type Role,
 } from "@/lib/auth";
+import { deleteProjectCascade, type ProjectDeletion } from "@/lib/projects";
 import { checkStockAlerts } from "@/lib/stock-alerts";
 
 export type Result = { ok: true } | { ok: false; error: string };
@@ -69,6 +71,54 @@ export async function createProjectAction(input: unknown): Promise<Result> {
   }
 }
 
+/**
+ * Renames a project and changes its code.
+ *
+ * Administrative, behind `canManageInventory`, while a project's description
+ * and its repository and documentation links belong to whoever runs it and are
+ * in [actions/projects.ts]. The split is the one the code itself makes: what a
+ * project *is* is the head's to say, but the code is what every order, cupboard
+ * and label is filed under, so changing it is a lab-wide decision.
+ *
+ * Nothing is re-filed by this. Orders, cupboards, BOMs and requests point at the
+ * project by id, so they follow it to whatever it is called next — which is the
+ * reason a rename is an ordinary correction here and a delete is not.
+ */
+export async function updateProjectAction(
+  projectId: string,
+  input: unknown,
+): Promise<Result> {
+  const user = await requireUser();
+  if (!canManageInventory(user)) {
+    return { ok: false, error: "Only admins and managers can edit projects." };
+  }
+
+  try {
+    const data = projectSchema.parse(input);
+
+    const updated = await db
+      .update(projects)
+      .set({ name: data.name, code: data.code })
+      .where(eq(projects.id, projectId))
+      .returning({ id: projects.id });
+
+    if (updated.length === 0) {
+      return { ok: false, error: "That project no longer exists." };
+    }
+
+    // The code shows up next to the project's name wherever it is filed.
+    revalidatePath("/admin/projects");
+    revalidatePath("/admin/locations");
+    revalidatePath(`/projects/${projectId}`);
+    revalidatePath("/projects");
+    revalidatePath("/orders");
+    revalidatePath("/requests");
+    return { ok: true };
+  } catch (error) {
+    return problem(error, "Could not save the project.");
+  }
+}
+
 export async function setProjectStatusAction(
   projectId: string,
   status: "active" | "closed",
@@ -81,6 +131,68 @@ export async function setProjectStatusAction(
   await db.update(projects).set({ status }).where(eq(projects.id, projectId));
   revalidatePath("/admin/projects");
   return { ok: true };
+}
+
+const deleteProjectSchema = z.object({
+  projectId: z.string().uuid(),
+  /** The project's own code, retyped by whoever is deleting it. */
+  confirmCode: z.string().trim().min(1, "Type the project code to confirm."),
+});
+
+/**
+ * Deletes a project, its BOMs and its part requests, and detaches its cupboards
+ * and its orders.
+ *
+ * The work is in `deleteProjectCascade()`, which takes a database handle so the
+ * exact SQL runs in the tests. What lives here is the part that cannot: who may
+ * ask for it, and the confirmation.
+ *
+ * Retyping the code is that confirmation. The button sits next to Close and the
+ * two are not equally recoverable — one hides a project, the other destroys
+ * work other people did — and a project code is short, on screen, and specific
+ * enough that typing it cannot happen by reflex.
+ */
+export async function deleteProjectAction(
+  input: z.input<typeof deleteProjectSchema>,
+): Promise<Result & { data?: ProjectDeletion }> {
+  const user = await requireUser();
+  if (!canDeleteProject(user)) {
+    return { ok: false, error: "Only admins and managers can delete projects." };
+  }
+
+  try {
+    const data = deleteProjectSchema.parse(input);
+
+    const [project] = await db
+      .select({ code: projects.code })
+      .from(projects)
+      .where(eq(projects.id, data.projectId));
+
+    if (!project) {
+      return { ok: false, error: "That project no longer exists." };
+    }
+    if (data.confirmCode.toLowerCase() !== project.code.toLowerCase()) {
+      return { ok: false, error: `Type ${project.code} to confirm.` };
+    }
+
+    const deleted = await deleteProjectCascade(db, data.projectId);
+    if (!deleted) {
+      return { ok: false, error: "That project no longer exists." };
+    }
+
+    // Everything that filed something under this project, plus the two screens
+    // whose rows have just lost theirs.
+    revalidatePath("/admin/projects");
+    revalidatePath("/admin/locations");
+    revalidatePath("/projects");
+    revalidatePath("/orders");
+    revalidatePath("/requests");
+    revalidatePath("/");
+
+    return { ok: true, data: deleted };
+  } catch (error) {
+    return problem(error, "Could not delete the project.");
+  }
 }
 
 /** Project heads are a join table, so this adds one without displacing others. */

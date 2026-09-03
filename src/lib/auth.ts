@@ -139,6 +139,20 @@ export function canManageUsers(user: SessionUser): boolean {
   return user.role === "manager";
 }
 
+/**
+ * Delete a project outright.
+ *
+ * Its own predicate rather than `canManageInventory`, even though it currently
+ * resolves to the same people, because it is the only project write that
+ * destroys rows somebody else created — a head's BOM, an engineer's requests —
+ * and detaches orders and cupboards from what they were bought for. Closing a
+ * project is the reversible option and stays behind `canManageInventory` with
+ * the rest of the administrative writes.
+ */
+export function canDeleteProject(user: SessionUser): boolean {
+  return user.role === "admin" || user.role === "manager";
+}
+
 /** Approve or reject a request — only a head of that very project, or a manager. */
 export function canApproveForProject(
   user: SessionUser,

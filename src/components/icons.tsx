@@ -199,6 +199,17 @@ export function PencilIcon({ className, size = 20 }: IconProps) {
   );
 }
 
+export function TrashIcon({ className, size = 20 }: IconProps) {
+  return (
+    <svg {...base(size)} className={className}>
+      <path d="M4 7h16" />
+      <path d="M10 4h4a1 1 0 0 1 1 1v2H9V5a1 1 0 0 1 1-1Z" />
+      <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" />
+      <path d="M10 11v6M14 11v6" />
+    </svg>
+  );
+}
+
 export function UndoIcon({ className, size = 20 }: IconProps) {
   return (
     <svg {...base(size)} className={className}>

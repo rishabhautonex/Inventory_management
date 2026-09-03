@@ -58,6 +58,7 @@ src/lib/ocr.ts          invoice text extraction, behind InvoiceTextExtractor
 src/lib/invoice-extract.ts  reads fields and line items off invoice text
 src/lib/invoice-match.ts  suggests catalogue matches; never writes
 src/lib/orders.ts       shared order+lines insert, used by both intake paths
+src/lib/projects.ts     the only project delete path; explicit, transactional
 src/lib/request-alerts.ts   request-workflow notifications
 src/lib/table-parse.ts  cells and delimiters, shared by both importers
 src/lib/bom-parse.ts    CSV / pasted-table reader; never guesses a quantity
@@ -451,6 +452,43 @@ so the guess is useful offered as one and dishonest presented as the project's
 documentation. Storing the README's text instead was the other option and would
 leave the app serving a copy that stopped matching the code the day after it was
 pasted. `tests/projects.test.ts` pins all of it.
+
+## Editing and deleting a project
+
+Name, code and status stay administrative — `canManageInventory`, the same set
+that creates a project — for the reason the head's own fields are not: the code
+is what every order, cupboard and label is filed under. A rename re-files
+nothing, because orders, cupboards, BOMs and requests all point at the project
+by id, which is what makes it an ordinary correction.
+
+Deleting is not. `deleteProjectCascade()` in
+[lib/projects.ts](src/lib/projects.ts) is the only path, it takes a `Database`
+handle so the exact SQL runs in the tests, and it does everything explicitly
+rather than leaving it to the foreign keys — the counts it returns are what the
+confirmation states beforehand and what the toast reports afterwards. The split
+that matters:
+
+- **Destroyed**: the project's BOMs (and their lines, by cascade), the part
+  requests raised against it, its heads' assignments. Records of what the
+  project wanted, unreadable without it.
+- **Detached**: its cupboards and its orders, which survive with `project_id`
+  null. An order is evidence money was spent and a cupboard still holds real
+  parts; deleting either would leave the ledger describing stock nobody bought.
+
+Nothing here touches `stock_movements`, so every shelf's on-hand figure is
+exactly what it was.
+
+`part_requests.project_id` is `ON DELETE restrict` and **stays that way**. The
+delete gets through it by deleting the requests itself, in the same transaction
+and in a count it reports, so the database still refuses a project pulled out
+from under somebody's requests by any other route —
+`tests/projects.test.ts` pins that. Confirmation is retyping the project code:
+the button sits next to Close, and one hides a project while the other destroys
+work other people did.
+
+`canDeleteProject()` is its own predicate in [lib/auth.ts](src/lib/auth.ts) even
+though it resolves to the same people as `canManageInventory`, because it is the
+only project write that destroys rows somebody else created.
 
 ## Part requests
 
